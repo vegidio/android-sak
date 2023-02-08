@@ -1,3 +1,5 @@
+@file:Suppress("UnstableApiUsage")
+
 plugins {
     id("com.android.library")
     id("org.jetbrains.kotlin.android")
@@ -33,15 +35,22 @@ android {
     kotlinOptions {
         jvmTarget = "1.8"
     }
+    buildFeatures {
+        compose = true
+    }
+    composeOptions {
+        kotlinCompilerExtensionVersion = "1.4.0"
+    }
 }
 
 dependencies {
+    implementation(Deps.compose_material3)
+    implementation(Deps.compose_ui)
+    implementation(Deps.compose_ui_tooling_preview)
     implementation(Deps.core_ktx)
-    implementation(Deps.coroutines_android)
-    implementation(Deps.coroutines_core)
-    implementation(Deps.okhttp)
-    implementation(Deps.okhttp_logging)
-    implementation(Deps.retrofit)
+
+    debugImplementation(Deps.compose_ui_tooling)
+    debugImplementation(Deps.compose_ui_test)
 }
 
 afterEvaluate {

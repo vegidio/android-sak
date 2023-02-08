@@ -15,8 +15,11 @@ buildscript {
 }
 
 detekt {
-    source = files("$rootDir/network/src/main/kotlin")
     config = files("$rootDir/config/detekt.yml")
+    source = files(
+        "$rootDir/network/src/main/kotlin",
+        "$rootDir/view/src/main/kotlin"
+    )
 }
 
 ktlint {
