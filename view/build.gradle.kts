@@ -5,7 +5,7 @@ plugins {
 }
 
 android {
-    namespace = "io.vinicius.sak.network"
+    namespace = "io.vinicius.sak.view"
     compileSdk = 33
 
     defaultConfig {

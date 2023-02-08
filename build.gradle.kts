@@ -8,6 +8,12 @@ plugins {
     id("org.jlleitschuh.gradle.ktlint") version Versions.ktlint
 }
 
+buildscript {
+    dependencies {
+        classpath(Deps.android_gradle)
+    }
+}
+
 detekt {
     source = files("$rootDir/network/src/main/kotlin")
     config = files("$rootDir/config/detekt.yml")
