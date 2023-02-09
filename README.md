@@ -4,7 +4,7 @@ Gradle library where I keep my custom classes, extensions and other files that h
 
 ## 🧰 Toolbox
 
-The Swiss Army Knife is currently divided in 1 package:
+The Swiss Army Knife is currently divided in 2 packages:
 
 ### Network
 
@@ -12,7 +12,9 @@ The Swiss Army Knife is currently divided in 1 package:
 
 ### View
 
-* __Temp:__ lazily initialize a view, allocation it only when it's needed.
+* __MyTextField:__ an `OutlinedTextField` with a few extra features set by default.
+* __MyEmailField:__ a `MyTextField` with e-mail parameters set by default.
+* __MyPasswordField:__ a `MyTextField` with password parameters set by default.
 
 ## 🎨 Code Correctness
 
