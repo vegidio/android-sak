@@ -1,9 +1,9 @@
 @file:Suppress("UnstableApiUsage")
 
 plugins {
-    id("com.android.library")
-    id("org.jetbrains.kotlin.android")
-    id("maven-publish")
+    id(Plugins.android_lib)
+    id(Plugins.kotlin)
+    id(Plugins.maven)
 }
 
 android {
@@ -38,9 +38,11 @@ android {
 }
 
 dependencies {
+    implementation(Deps.apollo_runtime)
     implementation(Deps.core_ktx)
     implementation(Deps.coroutines_android)
     implementation(Deps.coroutines_core)
+    implementation(Deps.moshi)
     implementation(Deps.okhttp)
     implementation(Deps.okhttp_logging)
     implementation(Deps.retrofit)

@@ -1,9 +1,9 @@
 @file:Suppress("UnstableApiUsage")
 
 plugins {
-    id("com.android.library")
-    id("org.jetbrains.kotlin.android")
-    id("maven-publish")
+    id(Plugins.android_lib)
+    id(Plugins.kotlin)
+    id(Plugins.maven)
 }
 
 android {

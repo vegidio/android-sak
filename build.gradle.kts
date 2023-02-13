@@ -1,11 +1,11 @@
 
 // Top-level build file where you can add configuration options common to all sub-projects/modules.
 plugins {
-    id("com.android.application") version Versions.android apply false
-    id("com.android.library") version Versions.android apply false
-    id("org.jetbrains.kotlin.android") version Versions.kotlin_android apply false
-    id("io.gitlab.arturbosch.detekt") version Versions.detekt
-    id("org.jlleitschuh.gradle.ktlint") version Versions.ktlint
+    id(Plugins.android_app) version Versions.android apply false
+    id(Plugins.android_lib) version Versions.android apply false
+    id(Plugins.kotlin) version Versions.kotlin apply false
+    id(Plugins.detekt) version Versions.detekt
+    id(Plugins.ktlint) version Versions.ktlint
 }
 
 buildscript {
@@ -27,5 +27,5 @@ ktlint {
 }
 
 subprojects {
-    apply(plugin = "org.jlleitschuh.gradle.ktlint")
+    apply(plugin = Plugins.ktlint)
 }
