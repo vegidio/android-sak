@@ -6,7 +6,6 @@ import okhttp3.Interceptor
 import okhttp3.OkHttpClient
 import okhttp3.logging.HttpLoggingInterceptor
 import okhttp3.logging.HttpLoggingInterceptor.Level
-import okhttp3.logging.HttpLoggingInterceptor.Logger
 import retrofit2.CallAdapter
 import retrofit2.Converter
 import retrofit2.Retrofit
@@ -16,27 +15,35 @@ import kotlin.time.Duration
 /**
  * Log configuration.
  *
- * @param logger define how the log should be output.
- * @param level defines the level of information that should be output.
+ * @param logger the default output of the log.
+ * @param level the level of information that should be output.
  */
-typealias LogHandler = Pair<Logger, Level>
+typealias LogHandler = Pair<(String) -> Unit, String>
 
 /**
  * Cache configuration.
  *
- * @param size defines the maximum cache storage, in bytes.
- * @param duration defines the maximum duration of the cached data.
+ * @param context the app context; used to save cached data in disk.
+ * @param duration the maximum duration of the cached data.
  */
-typealias CacheConfig = Pair<Long, Duration>
+typealias CacheConfig = Pair<Context, Duration>
 
-class RestFactory constructor(
-    private val context: Context,
-    var converter: Converter.Factory? = null,
-    var callAdapter: CallAdapter.Factory? = null,
-    var logHandler: LogHandler? = LogHandler(Logger.DEFAULT, Level.BASIC)
+open class RestFactory<T : Any>(
+    klass: KClass<T>,
+    baseUrl: String,
+    converter: Converter.Factory? = null,
+    callAdapter: CallAdapter.Factory? = null,
+    logHandler: LogHandler? = null,
+    cacheConfig: CacheConfig? = null,
 ) {
-    fun <T : Any> create(klass: KClass<T>, baseUrl: String, cacheConfig: CacheConfig? = null): T {
+    // Instance of API endpoints
+    protected val api: T
+
+    var headers: MutableMap<String, String> = mutableMapOf()
+
+    init {
         val client = OkHttpClient.Builder()
+            .addInterceptor(createHeadersInterceptor())
 
         // Adding the logger
         logHandler?.let { (logger, level) ->
@@ -44,8 +51,9 @@ class RestFactory constructor(
         }
 
         // Adding cache support
-        cacheConfig?.let { (size, duration) ->
-            client.cache(Cache(context.cacheDir, size)).addInterceptor(createCachePolicyInterceptor(duration))
+        cacheConfig?.let { (context, duration) ->
+            client.cache(Cache(context.cacheDir, maxSize = 10_000_000))
+                .addInterceptor(createCachePolicyInterceptor(duration))
         }
 
         val retrofit = Retrofit.Builder()
@@ -62,12 +70,19 @@ class RestFactory constructor(
             retrofit.addCallAdapterFactory(it)
         }
 
-        return retrofit.build().create(klass.java)
+        api = retrofit.build().create(klass.java)
     }
 
     // region - Private methods
-    private fun createLogInterceptor(logger: Logger, level: Level) =
-        HttpLoggingInterceptor(logger).apply { setLevel(level) }
+    private fun createLogInterceptor(logger: (String) -> Unit, level: String) =
+        HttpLoggingInterceptor { logger(it) }.apply { setLevel(Level.valueOf(level)) }
+
+    private fun createHeadersInterceptor() = Interceptor {
+        val request = it.request().newBuilder()
+        headers.forEach { (key, value) -> request.addHeader(key, value) }
+
+        it.proceed(request.build())
+    }
 
     private fun createCachePolicyInterceptor(duration: Duration) = Interceptor {
         val request = it.request().newBuilder()
