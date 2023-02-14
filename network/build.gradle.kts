@@ -46,6 +46,10 @@ dependencies {
     implementation(Deps.okhttp)
     implementation(Deps.okhttp_logging)
     implementation(Deps.retrofit)
+
+    testImplementation(Deps.junit)
+    androidTestImplementation(Deps.android_junit)
+    androidTestImplementation(Deps.android_espresso)
 }
 
 afterEvaluate {
