@@ -16,7 +16,7 @@ import kotlin.time.Duration
  * Log configuration.
  *
  * @param logger the default output of the log.
- * @param level the level of information that should be output.
+ * @param level the level of information that is output; NONE, BASIC, HEADERS, BODY
  */
 typealias LogHandler = Pair<(String) -> Unit, String>
 
@@ -31,8 +31,8 @@ typealias CacheConfig = Pair<Context, Duration>
 open class RestFactory<T : Any>(
     klass: KClass<T>,
     baseUrl: String,
-    converter: Converter.Factory? = null,
-    callAdapter: CallAdapter.Factory? = null,
+    converter: Converter.Factory? = GeneralConverterFactory.moshi(),
+    callAdapter: CallAdapter.Factory? = FlowCallAdapterFactory(),
     logHandler: LogHandler? = null,
     cacheConfig: CacheConfig? = null,
 ) {

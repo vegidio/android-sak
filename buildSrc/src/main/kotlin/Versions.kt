@@ -43,4 +43,5 @@ object Deps {
     const val okhttp = "com.squareup.okhttp3:okhttp:${Versions.okhttp}"
     const val okhttp_logging = "com.squareup.okhttp3:logging-interceptor:${Versions.okhttp}"
     const val retrofit = "com.squareup.retrofit2:retrofit:${Versions.retrofit}"
+    const val retrofit_moshi = "com.squareup.retrofit2:converter-moshi:${Versions.retrofit}"
 }
