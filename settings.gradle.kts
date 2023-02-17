@@ -14,4 +14,5 @@ dependencyResolutionManagement {
 }
 rootProject.name = "android-sak"
 include(":network")
+include(":util")
 include(":view")
