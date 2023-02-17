@@ -8,13 +8,24 @@ The Swiss Army Knife is currently divided in 2 packages:
 
 ### Network
 
-* __RestFactory:__ to make HTTP requests and process the responses.
+* __FlowCallAdapterFactory:__ a Retrofit `CallAdapter` to output the responses as Flow.
+* __GeneralConverterFactory:__ a general class to create different Retrofit `Converter`.
+* __GraphqlFactory:__ to make GraphQL requests and process the responses.
+* __NetworkState:__ enum with basic enum states and the ability to pass data to errors.
+* __RestFactory:__ to make REST requests and process the responses.
+
+### Util
+
+* __DataFlow:__ an interface that allows the creation of `PrivateStateFlow` and `PrivateSharedFlow`.
 
 ### View
 
-* __MyTextField:__ an `OutlinedTextField` with a few extra features set by default.
+* __ListRow:__ a view to be used in lists with chevron and separator set by default.
 * __MyEmailField:__ a `MyTextField` with e-mail parameters set by default.
 * __MyPasswordField:__ a `MyTextField` with password parameters set by default.
+* __MyTextField:__ an `OutlinedTextField` with a few extra features set by default.
+* __OverlaidColumn:__ a `Column` with multiple overlays that change depending on a state.
+* __OverlaidRow:__ a `Row` with multiple overlays that change depending on a state.
 
 ## 🎨 Code Correctness
 
