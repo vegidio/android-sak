@@ -4,19 +4,19 @@ Gradle library where I keep my custom classes, extensions and other files that h
 
 ## 🧰 Toolbox
 
-The Swiss Army Knife is currently divided in 2 packages:
+The Swiss Army Knife is currently divided in 3 packages:
 
 ### Network
 
 * __FlowCallAdapterFactory:__ a Retrofit `CallAdapter` to output the responses as Flow.
-* __GeneralConverterFactory:__ a general class to create different Retrofit `Converter`.
+* __GeneralConverterFactory:__ a general class to create different Retrofit `Converter`s.
 * __GraphqlFactory:__ to make GraphQL requests and process the responses.
-* __NetworkState:__ enum with basic enum states and the ability to pass data to errors.
+* __NetworkState:__ enum with basic states and the ability to pass data to errors.
 * __RestFactory:__ to make REST requests and process the responses.
 
 ### Util
 
-* __DataFlow:__ an interface that allows the creation of `PrivateStateFlow` and `PrivateSharedFlow`.
+* __PrivateFlow:__ an interface that allows the creation of `PrivateStateFlow` and `PrivateSharedFlow`.
 
 ### View
 

@@ -72,9 +72,7 @@ private fun DefaultChevron() {
 @Composable
 private fun DefaultDivider() {
     Divider(
-        Modifier
-            .padding(horizontal = 8.dp)
-            .fillMaxWidth()
+        Modifier.fillMaxWidth(fraction = 0.8f)
     )
 }
 

@@ -24,7 +24,7 @@ private class PrivateSharedFlowImpl<T>(
     val wrapped: MutableSharedFlow<T> = MutableSharedFlow(replay, extraBufferCapacity, onBufferOverflow)
 ) : PrivateSharedFlow<T>(wrapped)
 
-interface DataFlow {
+interface PrivateFlow {
     var <T> PrivateStateFlow<T>.mutable: T
         get() = when (this) {
             is PrivateStateFlowImpl -> wrapped.value

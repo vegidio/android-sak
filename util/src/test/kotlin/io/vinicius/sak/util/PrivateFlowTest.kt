@@ -3,7 +3,7 @@ package io.vinicius.sak.util
 import io.vinicius.sak.util.internal.Repository
 import org.junit.Test
 
-class DataFlowTest {
+class PrivateFlowTest {
     @Test
     fun blah() {
         val repo = Repository()
