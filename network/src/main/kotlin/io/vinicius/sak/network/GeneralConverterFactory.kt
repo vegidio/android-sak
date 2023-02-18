@@ -8,7 +8,7 @@ import retrofit2.converter.moshi.MoshiConverterFactory
 object GeneralConverterFactory {
     fun moshi(): Converter.Factory {
         val moshi = Moshi.Builder()
-            .addLast(KotlinJsonAdapterFactory())
+            .addLast(KotlinJsonAdapterFactory()) // Needed to deserialize without @JsonClass
             .build()
 
         return MoshiConverterFactory.create(moshi)

@@ -53,6 +53,7 @@ fun ListRow(
 
         Box(
             Modifier.constrainAs(dividerRef) {
+                centerHorizontallyTo(parent)
                 bottom.linkTo(parent.bottom)
             }
         ) {
@@ -72,7 +73,7 @@ private fun DefaultChevron() {
 @Composable
 private fun DefaultDivider() {
     Divider(
-        Modifier.fillMaxWidth(fraction = 0.8f)
+        Modifier.fillMaxWidth(fraction = 0.9f)
     )
 }
 
