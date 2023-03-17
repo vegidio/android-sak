@@ -1,16 +1,18 @@
 package io.vinicius.sak.network
 
-enum class NetworkState(var value: Any? = null) {
-    Idle,
-    Loading,
-    Error;
+sealed class NetworkState {
+    object Idle : NetworkState()
+    object Loading : NetworkState()
 
-    companion object {
-        fun error(data: Any) = NetworkState.Error.apply {
-            this.value = data
+    data class Error(val throwable: Throwable = Error("Unknown error")) : NetworkState() {
+        override fun equals(other: Any?): Boolean {
+            if (this === other) return true
+            if (other !is Error) return false
+            return true
         }
-    }
-}
 
-@Suppress("Unchecked_Cast")
-fun <T> NetworkState.data() = this.value as T
+        override fun hashCode(): Int = 1
+    }
+
+    val error: Throwable? get() = if (this is NetworkState.Error) this.throwable else null
+}
