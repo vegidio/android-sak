@@ -49,6 +49,7 @@ dependencies {
     implementation(Deps.compose_ui_tooling_preview)
     implementation(Deps.constraintlayout)
     implementation(Deps.core_ktx)
+    implementation(Deps.lottie)
     implementation(Deps.material_icons)
 
     debugImplementation(Deps.compose_ui_tooling)
