@@ -14,5 +14,5 @@ sealed class NetworkState {
         override fun hashCode(): Int = 1
     }
 
-    val error: Throwable? get() = if (this is NetworkState.Error) this.throwable else null
+    val error: Throwable? get() = if (this is Error) this.throwable else null
 }
