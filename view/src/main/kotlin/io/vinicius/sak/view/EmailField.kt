@@ -19,14 +19,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.tooling.preview.Preview
 import io.vinicius.sak.view.internal.TextFieldClearButton
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun MyPasswordField(
+fun EmailField(
     onValueChange: (String) -> Unit,
     modifier: Modifier = Modifier,
     initialValue: String = "",
@@ -39,8 +38,8 @@ fun MyPasswordField(
     trailingIcon: @Composable (() -> Unit)? = null,
     supportingText: @Composable (() -> Unit)? = null,
     isError: Boolean = false,
-    visualTransformation: VisualTransformation = PasswordVisualTransformation(),
-    keyboardOptions: KeyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+    visualTransformation: VisualTransformation = VisualTransformation.None,
+    keyboardOptions: KeyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
     keyboardActions: KeyboardActions = KeyboardActions.Default,
     singleLine: Boolean = true,
     maxLines: Int = if (singleLine) 1 else Int.MAX_VALUE,
@@ -89,9 +88,9 @@ fun MyPasswordField(
 @Preview(showBackground = true, backgroundColor = 0xFFFFFF)
 @Composable
 private fun DefaultPreview1() {
-    MyPasswordField(
+    EmailField(
         label = {
-            Text("Password")
+            Text("E-mail")
         }, onValueChange = {}
     )
 }
@@ -99,9 +98,9 @@ private fun DefaultPreview1() {
 @Preview(showBackground = true, backgroundColor = 0xFFFFFF)
 @Composable
 private fun DefaultPreview2() {
-    MyPasswordField(
-        initialValue = "12345678",
-        label = { Text("Password") },
+    EmailField(
+        initialValue = "me@vinicius.io",
+        label = { Text("E-mail") },
         onValueChange = {}
     )
 }

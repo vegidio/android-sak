@@ -1,6 +1,6 @@
 # Android Swiss Army Knife
 
-Gradle library where I keep my custom classes, extensions and other files that help me during the development of my Android projects.
+A Gradle library where I keep my custom classes, extensions and other files that help me during the development of my Android projects.
 
 ## 🧰 Toolbox
 
@@ -11,21 +11,33 @@ The Swiss Army Knife is currently divided in 3 packages:
 * __FlowCallAdapterFactory:__ a Retrofit `CallAdapter` to output the responses as Flow.
 * __GeneralConverterFactory:__ a general class to create different Retrofit `Converter`s.
 * __GraphqlFactory:__ to make GraphQL requests and process the responses.
-* __NetworkState:__ enum with basic states and the ability to pass data to errors.
 * __RestFactory:__ to make REST requests and process the responses.
+* __NetworkState:__ enum with basic states and the ability to pass data to errors.
+
+#### Adapter
+
+* __BigDecimalAdapter:__ a Moshi adapter to de/serialize `BigDecimal` fields.
+* __LocalDateAdapter:__ a Moshi adapter to de/serialize `LocalDate` fields.
+* __LocalTimeAdapter:__ a Moshi adapter to de/serialize `LocalTime` fields.
+* __LocalDateTimeAdapter:__ a Moshi adapter to de/serialize `LocalDateTime` fields.
 
 ### Util
 
 * __PrivateFlow:__ an interface that allows the creation of `PrivateStateFlow` and `PrivateSharedFlow`.
+* __StringExtensions:__ a set of extensions useful for String manipulation.
 
 ### View
 
+* __InputField:__ an `OutlinedTextField` with a few extra features set by default.
+* __EmailField:__ a `InputField` with e-mail parameters set by default.
+* __PasswordField:__ a `InputField` with password parameters set by default.
 * __ListRow:__ a view to be used in lists with chevron and separator set by default.
-* __MyEmailField:__ a `MyTextField` with e-mail parameters set by default.
-* __MyPasswordField:__ a `MyTextField` with password parameters set by default.
-* __MyTextField:__ an `OutlinedTextField` with a few extra features set by default.
+* __Lottie:__ a view used to display Lottie animations.
 * __OverlaidColumn:__ a `Column` with multiple overlays that change depending on a state.
 * __OverlaidRow:__ a `Row` with multiple overlays that change depending on a state.
+* __OverlaidLazyColumn:__ a `LazyColumn` with multiple overlays that change depending on a state.
+* __OverlaidLazyRow:__ a `LazyRow` with multiple overlays that change depending on a state.
+* __OverlaidLazyVerticalGrid:__ a `LazyVerticalGrid` with multiple overlays that change depending on a state.
 
 ## 🎨 Code Correctness
 

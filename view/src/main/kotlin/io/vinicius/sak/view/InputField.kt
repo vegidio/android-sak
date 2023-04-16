@@ -18,14 +18,13 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.tooling.preview.Preview
 import io.vinicius.sak.view.internal.TextFieldClearButton
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun MyEmailField(
+fun InputField(
     onValueChange: (String) -> Unit,
     modifier: Modifier = Modifier,
     initialValue: String = "",
@@ -39,7 +38,7 @@ fun MyEmailField(
     supportingText: @Composable (() -> Unit)? = null,
     isError: Boolean = false,
     visualTransformation: VisualTransformation = VisualTransformation.None,
-    keyboardOptions: KeyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
+    keyboardOptions: KeyboardOptions = KeyboardOptions.Default,
     keyboardActions: KeyboardActions = KeyboardActions.Default,
     singleLine: Boolean = true,
     maxLines: Int = if (singleLine) 1 else Int.MAX_VALUE,
@@ -88,9 +87,9 @@ fun MyEmailField(
 @Preview(showBackground = true, backgroundColor = 0xFFFFFF)
 @Composable
 private fun DefaultPreview1() {
-    MyEmailField(
+    InputField(
         label = {
-            Text("E-mail")
+            Text("Field")
         }, onValueChange = {}
     )
 }
@@ -98,9 +97,9 @@ private fun DefaultPreview1() {
 @Preview(showBackground = true, backgroundColor = 0xFFFFFF)
 @Composable
 private fun DefaultPreview2() {
-    MyEmailField(
-        initialValue = "me@vinicius.io",
-        label = { Text("E-mail") },
+    InputField(
+        initialValue = "Lorem Ipsum",
+        label = { Text("Field") },
         onValueChange = {}
     )
 }
