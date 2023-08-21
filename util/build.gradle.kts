@@ -41,6 +41,7 @@ dependencies {
     implementation(Deps.core_ktx)
     implementation(Deps.coroutines_android)
     implementation(Deps.coroutines_core)
+    implementation(Deps.usb_serial)
 
     testImplementation(Deps.junit)
     androidTestImplementation(Deps.android_junit)

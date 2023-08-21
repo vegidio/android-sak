@@ -17,6 +17,7 @@ object Versions {
     const val moshi = "1.14.0"
     const val okhttp = "4.10.0"
     const val retrofit = "2.9.0"
+    const val usb_serial = "3.5.1"
 }
 
 object Plugins {
@@ -50,4 +51,5 @@ object Deps {
     const val okhttp_logging = "com.squareup.okhttp3:logging-interceptor:${Versions.okhttp}"
     const val retrofit = "com.squareup.retrofit2:retrofit:${Versions.retrofit}"
     const val retrofit_moshi = "com.squareup.retrofit2:converter-moshi:${Versions.retrofit}"
+    const val usb_serial = "com.github.mik3y:usb-serial-for-android:${Versions.usb_serial}"
 }
