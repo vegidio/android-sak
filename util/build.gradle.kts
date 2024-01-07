@@ -3,9 +3,12 @@
 import org.jetbrains.kotlin.config.JvmTarget
 
 plugins {
-    id(Plugins.android_lib)
-    id(Plugins.kotlin)
-    id(Plugins.maven)
+    alias(libs.plugins.android.lib)
+    alias(libs.plugins.kotlin)
+    `maven-publish`
+
+    // We must have the next plugins in all subprojects that need Ktlint
+    alias(libs.plugins.ktlint)
 }
 
 android {
@@ -14,7 +17,6 @@ android {
 
     defaultConfig {
         minSdk = 30
-
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         consumerProguardFiles("consumer-rules.pro")
     }
@@ -40,14 +42,14 @@ android {
 }
 
 dependencies {
-    implementation(Deps.core_ktx)
-    implementation(Deps.coroutines_android)
-    implementation(Deps.coroutines_core)
-    implementation(Deps.usb_serial)
+    implementation(libs.core.ktx)
+    implementation(libs.coroutines.android)
+    implementation(libs.coroutines.core)
+    implementation(libs.usb.serial)
 
-    testImplementation(Deps.junit)
-    androidTestImplementation(Deps.android_junit)
-    androidTestImplementation(Deps.android_espresso)
+    testImplementation(libs.junit)
+    androidTestImplementation(libs.test.espresso)
+    androidTestImplementation(libs.test.ext)
 }
 
 afterEvaluate {

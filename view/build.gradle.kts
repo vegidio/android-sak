@@ -3,9 +3,12 @@
 import org.jetbrains.kotlin.config.JvmTarget
 
 plugins {
-    id(Plugins.android_lib)
-    id(Plugins.kotlin)
-    id(Plugins.maven)
+    alias(libs.plugins.android.lib)
+    alias(libs.plugins.kotlin)
+    `maven-publish`
+
+    // We must have the next plugins in all subprojects that need Ktlint
+    alias(libs.plugins.ktlint)
 }
 
 android {
@@ -14,7 +17,6 @@ android {
 
     defaultConfig {
         minSdk = 30
-
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         consumerProguardFiles("consumer-rules.pro")
     }
@@ -46,17 +48,17 @@ android {
 }
 
 dependencies {
-    api(Deps.constraintlayout)
-    api(Deps.lottie)
+    api(libs.constraintlayout)
+    api(libs.lottie)
 
-    implementation(Deps.compose_material3)
-    implementation(Deps.compose_ui)
-    implementation(Deps.compose_ui_tooling_preview)
-    implementation(Deps.core_ktx)
-    implementation(Deps.material_icons)
+    implementation(libs.compose.material3)
+    implementation(libs.compose.ui)
+    implementation(libs.compose.ui.tooling.preview)
+    implementation(libs.core.ktx)
+    implementation(libs.material.icons)
 
-    debugImplementation(Deps.compose_ui_tooling)
-    debugImplementation(Deps.compose_ui_test)
+    debugImplementation(libs.compose.ui.test)
+    debugImplementation(libs.compose.ui.tooling)
 }
 
 afterEvaluate {

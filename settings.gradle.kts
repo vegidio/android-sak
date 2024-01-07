@@ -13,6 +13,7 @@ dependencyResolutionManagement {
         maven { setUrl("https://jitpack.io") }
     }
 }
+
 rootProject.name = "android-sak"
 include(":network")
 include(":util")

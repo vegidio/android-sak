@@ -1,21 +1,15 @@
-// Top-level build file where you can add configuration options common to all sub-projects/modules.
+// Top-level build file where you can add configuration options common to all subprojects/modules
 plugins {
-    id(Plugins.android_app) version Versions.android apply false
-    id(Plugins.android_lib) version Versions.android apply false
-    id(Plugins.kotlin) version Versions.kotlin apply false
-    id(Plugins.detekt) version Versions.detekt
-    id(Plugins.ktlint) version Versions.ktlint
-}
-
-buildscript {
-    dependencies {
-        classpath(Deps.android_gradle)
-    }
+    alias(libs.plugins.android.app) apply false
+    alias(libs.plugins.android.lib) apply false
+    alias(libs.plugins.kotlin) apply false
+    alias(libs.plugins.detekt)
+    alias(libs.plugins.ktlint)
 }
 
 detekt {
-    config = files("$rootDir/config/detekt.yml")
-    source = files(
+    config.setFrom("$rootDir/config/detekt.yml")
+    source.setFrom(
         "$rootDir/network/src/main/kotlin",
         "$rootDir/util/src/main/kotlin",
         "$rootDir/view/src/main/kotlin"
@@ -24,8 +18,4 @@ detekt {
 
 ktlint {
     android.set(true)
-}
-
-subprojects {
-    apply(plugin = Plugins.ktlint)
 }
