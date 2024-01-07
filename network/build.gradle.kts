@@ -13,7 +13,7 @@ plugins {
 
 android {
     namespace = "io.vinicius.sak.network"
-    compileSdk = 33
+    compileSdk = 34
 
     defaultConfig {
         minSdk = 30

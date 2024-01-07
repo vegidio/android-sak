@@ -13,7 +13,7 @@ plugins {
 
 android {
     namespace = "io.vinicius.sak.view"
-    compileSdk = 33
+    compileSdk = 34
 
     defaultConfig {
         minSdk = 30
@@ -43,7 +43,7 @@ android {
         compose = true
     }
     composeOptions {
-        kotlinCompilerExtensionVersion = "1.4.0"
+        kotlinCompilerExtensionVersion = "1.5.7"
     }
 }
 

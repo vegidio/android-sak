@@ -1,8 +1,8 @@
 package io.vinicius.sak.network
 
 sealed class NetworkState {
-    object Idle : NetworkState()
-    object Loading : NetworkState()
+    data object Idle : NetworkState()
+    data object Loading : NetworkState()
 
     data class Error(val throwable: Throwable = Error("Unknown error")) : NetworkState() {
         override fun equals(other: Any?): Boolean {

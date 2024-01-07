@@ -7,13 +7,14 @@ import com.apollographql.apollo3.api.toJson
 import com.squareup.moshi.Moshi
 import com.squareup.moshi.Types
 import io.vinicius.sak.network.internal.GraphqlHeaderInterceptor
-import kotlinx.coroutines.FlowPreview
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flatMapConcat
 import kotlinx.coroutines.flow.flowOf
 import org.json.JSONObject
 import kotlin.reflect.KClass
 
+@OptIn(ExperimentalCoroutinesApi::class)
 open class GraphqlFactory(url: String, vararg val types: KClass<*>) {
     @PublishedApi internal val moshi = Moshi.Builder().build()
     @PublishedApi internal val headerInterceptor = GraphqlHeaderInterceptor()
@@ -26,7 +27,6 @@ open class GraphqlFactory(url: String, vararg val types: KClass<*>) {
         get() = headerInterceptor.headers
         set(value) = headerInterceptor.headers.putAll(value)
 
-    @OptIn(FlowPreview::class)
     inline fun <reified T> sendQuery(
         query: Query<*>,
         headers: Map<String, String> = emptyMap()
@@ -42,7 +42,6 @@ open class GraphqlFactory(url: String, vararg val types: KClass<*>) {
             }
     }
 
-    @OptIn(FlowPreview::class)
     inline fun <reified T> sendMutation(
         mutation: Mutation<*>,
         headers: Map<String, String> = emptyMap()
