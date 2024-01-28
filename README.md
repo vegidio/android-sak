@@ -1,6 +1,34 @@
 # Android Swiss Army Knife
 
-A Gradle library where I keep my custom classes, extensions and other files that help me during the development of my Android projects.
+An Android library where I keep my custom classes, extensions and other files that help me during the development of my Android projects.
+
+## ⬇️ Download
+
+This library is hosted in my own Maven repository, so before using it in your project you must add the repository `https://maven.vinicius.io` to your `settings.gradle.kts` file:
+
+```kotlin
+dependencyResolutionManagement {
+    //...
+    repositories {
+        google()
+        mavenCentral()
+        maven { setUrl("https://maven.vinicius.io") } // Add this line
+    }
+    //...
+}
+```
+
+With the repository added, you just need to add the dependencies that you need to your project's `build.gradle.kts` file:
+
+```kotlin
+//...
+dependencies {
+    implementation("io.vinicius.sak:network:24.1.16") // Network SAK
+    implementation("io.vinicius.sak:util:24.1.16")    // Util SAK
+    implementation("io.vinicius.sak:view:24.1.16")    // View SAK
+}
+//...
+```
 
 ## 🧰 Toolbox
 
@@ -46,30 +74,6 @@ This project uses [Ktlint](https://github.com/pinterest/ktlint) to keep the code
 ```
 $ ./gradlew ktlintFormat detekt
 ```
-
-## 👷🏾‍♂️ Building
-
-This library is published with the help of [Jitpack](https://jitpack.io/#vegidio/android-sak). In order to make the library work properly, there are a few conditions that need to be satisfied:
-
-1. Each module should use the plugin `maven-publish` and add the publishing instruction below:
-
-```kotlin
-afterEvaluate {
-    publishing {
-        publications {
-            create<MavenPublication>("maven") {
-                from(components["release"])
-            }
-        }
-    }
-}
-```
-
-2. If the package has only one module, the lib should be imported using `com.github.vegidio:android-sak:<version>`, but if there are 2 or more modules then the lib should be imported using `com.github.vegidio.android-sak:lib1:<version>`, `com.github.vegidio.android-sak:lib2:<version>`, etc.
-
-3. The code in each module should __not__ be minified.
-
-4. The `sourceCompatibility` and `targetCompatibility` must target at least Java 11 (`JavaVersion.VERSION_11`).
 
 ## 👨🏾‍💻 Author
 
