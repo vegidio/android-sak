@@ -1,3 +1,4 @@
+import com.android.build.api.dsl.LibraryExtension
 import org.gradle.api.Plugin
 import org.gradle.api.Project
 import org.gradle.api.publish.PublishingExtension
@@ -9,6 +10,12 @@ class PublishPlugin : Plugin<Project> {
     override fun apply(target: Project) {
         with(target) {
             pluginManager.apply("maven-publish")
+
+            extensions.configure<LibraryExtension> {
+                publishing {
+                    singleVariant("release")
+                }
+            }
 
             extensions.configure<PublishingExtension> {
                 repositories {
@@ -24,21 +31,18 @@ class PublishPlugin : Plugin<Project> {
 
                 publications {
                     register<MavenPublication>("release") {
-                        groupId = "io.vinicius"
-                        version = project.version.toString()
+                        groupId = "io.vinicius.sak"
+                        version = System.getenv("VERSION") ?: "0.0.0"
                         // artifactId is set per-module in its build.gradle.kts
                     }
                 }
             }
 
-            // Wire the AGP "release" component to the publication lazily.
-            // components.matching().configureEach() fires when AGP adds the component
-            // (in its own afterEvaluate), regardless of callback ordering.
-            components.matching { it.name == "release" }.configureEach {
-                val releaseComponent = this
+            // Wire the AGP "release" component after it has been created by AGP
+            afterEvaluate {
                 extensions.configure<PublishingExtension> {
                     publications.named("release", MavenPublication::class.java) {
-                        from(releaseComponent)
+                        from(components.getByName("release"))
                     }
                 }
             }

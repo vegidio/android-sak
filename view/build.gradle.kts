@@ -15,7 +15,7 @@ android {
 version = "0.1.0"
 
 publishing.publications.named<MavenPublication>("release") {
-    artifactId = "sak-view"
+    artifactId = "view"
 }
 
 dependencies {
