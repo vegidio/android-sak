@@ -10,6 +10,7 @@ import org.junit.Before
 import org.junit.Test
 import retrofit2.http.GET
 import java.util.concurrent.atomic.AtomicInteger
+import kotlin.time.Duration.Companion.seconds
 
 class RestClientTest {
 
@@ -83,7 +84,7 @@ class RestClientTest {
                 baseUrl = baseUrl(),
                 tokenProvider = { "token" },
                 tokenRefresher = { refreshCount.incrementAndGet(); true },
-                preemptiveRefreshSeconds = 1,
+                preemptiveRefresh = 1.seconds,
             )
         )
         client.close()
@@ -127,7 +128,7 @@ class RestClientTest {
         val client = RestClient(
             RestConfiguration(
                 baseUrl = baseUrl(),
-                cachePolicy = CachePolicy(enabled = true, ttlMillis = 60_000),
+                cachePolicy = CachePolicy(enabled = true, ttl = 60.seconds),
             )
         )
 

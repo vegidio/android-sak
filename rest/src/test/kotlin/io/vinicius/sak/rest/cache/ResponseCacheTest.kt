@@ -5,25 +5,27 @@ import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
+import kotlin.time.Duration.Companion.milliseconds
+import kotlin.time.Duration.Companion.seconds
 
 class ResponseCacheTest {
 
     @Test
     fun `get on empty cache returns null`() = runTest {
-        val cache = ResponseCache(ttlMillis = 60_000, maxEntries = 10)
+        val cache = ResponseCache(ttl = 60.seconds, maxEntries = 10)
         assertNull(cache.get("https://example.com/api"))
     }
 
     @Test
     fun `put then get within TTL returns stored value`() = runTest {
-        val cache = ResponseCache(ttlMillis = 60_000, maxEntries = 10)
+        val cache = ResponseCache(ttl = 60.seconds, maxEntries = 10)
         cache.put("key1", """{"id":1}""")
         assertEquals("""{"id":1}""", cache.get("key1"))
     }
 
     @Test
     fun `get after TTL expires returns null`() = runTest {
-        val cache = ResponseCache(ttlMillis = 1, maxEntries = 10) // 1ms TTL
+        val cache = ResponseCache(ttl = 1.milliseconds, maxEntries = 10) // 1ms TTL
         cache.put("key1", """{"id":1}""")
         Thread.sleep(10) // wait for expiry
         assertNull(cache.get("key1"))
@@ -31,7 +33,7 @@ class ResponseCacheTest {
 
     @Test
     fun `inserting beyond maxEntries evicts oldest entry`() = runTest {
-        val cache = ResponseCache(ttlMillis = 60_000, maxEntries = 2)
+        val cache = ResponseCache(ttl = 60.seconds, maxEntries = 2)
         cache.put("key1", "value1")
         cache.put("key2", "value2")
         cache.put("key3", "value3") // should evict key1
@@ -42,7 +44,7 @@ class ResponseCacheTest {
 
     @Test
     fun `clear removes all entries`() = runTest {
-        val cache = ResponseCache(ttlMillis = 60_000, maxEntries = 10)
+        val cache = ResponseCache(ttl = 60.seconds, maxEntries = 10)
         cache.put("key1", "value1")
         cache.put("key2", "value2")
         cache.clear()
@@ -52,7 +54,7 @@ class ResponseCacheTest {
 
     @Test
     fun `put overwrites existing entry for same key`() = runTest {
-        val cache = ResponseCache(ttlMillis = 60_000, maxEntries = 10)
+        val cache = ResponseCache(ttl = 60.seconds, maxEntries = 10)
         cache.put("key1", "original")
         cache.put("key1", "updated")
         assertEquals("updated", cache.get("key1"))
@@ -60,7 +62,7 @@ class ResponseCacheTest {
 
     @Test
     fun `concurrent put and get do not produce data races`() = runTest {
-        val cache = ResponseCache(ttlMillis = 60_000, maxEntries = 100)
+        val cache = ResponseCache(ttl = 60.seconds, maxEntries = 100)
         val jobs = (1..50).map { i ->
             launch { cache.put("key$i", "value$i") }
         }

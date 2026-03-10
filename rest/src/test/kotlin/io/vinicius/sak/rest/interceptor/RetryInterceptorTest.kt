@@ -1,6 +1,7 @@
 package io.vinicius.sak.rest.interceptor
 
 import io.vinicius.sak.rest.RetryPolicy
+import kotlin.time.Duration
 import mockwebserver3.MockResponse
 import mockwebserver3.MockWebServer
 import okhttp3.OkHttpClient
@@ -34,7 +35,7 @@ class RetryInterceptorTest {
     @Test
     fun `200 response is returned without retry`() {
         server.enqueue(response(200, "ok"))
-        val response = clientWith(RetryPolicy(maxAttempts = 3, delayMillis = 0)).newCall(get()).execute()
+        val response = clientWith(RetryPolicy(maxAttempts = 3, delay = Duration.ZERO)).newCall(get()).execute()
         assertEquals(200, response.code)
         assertEquals(1, server.requestCount)
     }
@@ -42,7 +43,7 @@ class RetryInterceptorTest {
     @Test
     fun `401 is returned immediately without retry`() {
         server.enqueue(response(401))
-        val response = clientWith(RetryPolicy(maxAttempts = 3, delayMillis = 0)).newCall(get()).execute()
+        val response = clientWith(RetryPolicy(maxAttempts = 3, delay = Duration.ZERO)).newCall(get()).execute()
         assertEquals(401, response.code)
         assertEquals(1, server.requestCount)
     }
@@ -50,7 +51,7 @@ class RetryInterceptorTest {
     @Test
     fun `404 is returned immediately without retry`() {
         server.enqueue(response(404))
-        val response = clientWith(RetryPolicy(maxAttempts = 3, delayMillis = 0)).newCall(get()).execute()
+        val response = clientWith(RetryPolicy(maxAttempts = 3, delay = Duration.ZERO)).newCall(get()).execute()
         assertEquals(404, response.code)
         assertEquals(1, server.requestCount)
     }
@@ -58,7 +59,7 @@ class RetryInterceptorTest {
     @Test
     fun `500 is retried up to maxAttempts`() {
         repeat(3) { server.enqueue(response(500)) }
-        val response = clientWith(RetryPolicy(maxAttempts = 3, delayMillis = 0)).newCall(get()).execute()
+        val response = clientWith(RetryPolicy(maxAttempts = 3, delay = Duration.ZERO)).newCall(get()).execute()
         assertEquals(500, response.code)
         assertEquals(3, server.requestCount)
     }
@@ -68,7 +69,7 @@ class RetryInterceptorTest {
         server.enqueue(response(500))
         server.enqueue(response(500))
         server.enqueue(response(200, "recovered"))
-        val response = clientWith(RetryPolicy(maxAttempts = 3, delayMillis = 0)).newCall(get()).execute()
+        val response = clientWith(RetryPolicy(maxAttempts = 3, delay = Duration.ZERO)).newCall(get()).execute()
         assertEquals(200, response.code)
         assertEquals(3, server.requestCount)
     }
@@ -76,7 +77,7 @@ class RetryInterceptorTest {
     @Test
     fun `maxAttempts of 1 means no retry on 500`() {
         server.enqueue(response(500))
-        val response = clientWith(RetryPolicy(maxAttempts = 1, delayMillis = 0)).newCall(get()).execute()
+        val response = clientWith(RetryPolicy(maxAttempts = 1, delay = Duration.ZERO)).newCall(get()).execute()
         assertEquals(500, response.code)
         assertEquals(1, server.requestCount)
     }
@@ -85,7 +86,7 @@ class RetryInterceptorTest {
     fun `IOException is retried and rethrown after maxAttempts`() {
         server.close()
         val client = OkHttpClient.Builder()
-            .addInterceptor(RetryInterceptor(RetryPolicy(maxAttempts = 2, delayMillis = 0)))
+            .addInterceptor(RetryInterceptor(RetryPolicy(maxAttempts = 2, delay = Duration.ZERO)))
             .build()
         client.newCall(Request.Builder().url("http://localhost:1").build()).execute()
     }

@@ -7,6 +7,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.util.Base64
 import java.util.Date
+import kotlin.time.Duration.Companion.seconds
 
 class JwtUtilityTest {
 
@@ -56,31 +57,31 @@ class JwtUtilityTest {
     fun `isExpiringSoon - token expiring after threshold returns false`() {
         val expSeconds = (System.currentTimeMillis() / 1000) + 3600 // 1 hour from now
         val token = buildJwt("""{"exp":$expSeconds}""")
-        assertFalse(JwtUtility.isExpiringSoon(token, thresholdSeconds = 60))
+        assertFalse(JwtUtility.isExpiringSoon(token, threshold = 60.seconds))
     }
 
     @Test
     fun `isExpiringSoon - token expiring within threshold returns true`() {
         val expSeconds = (System.currentTimeMillis() / 1000) + 30 // 30 seconds from now
         val token = buildJwt("""{"exp":$expSeconds}""")
-        assertTrue(JwtUtility.isExpiringSoon(token, thresholdSeconds = 60))
+        assertTrue(JwtUtility.isExpiringSoon(token, threshold = 60.seconds))
     }
 
     @Test
     fun `isExpiringSoon - already expired token returns true`() {
         val expSeconds = (System.currentTimeMillis() / 1000) - 100
         val token = buildJwt("""{"exp":$expSeconds}""")
-        assertTrue(JwtUtility.isExpiringSoon(token, thresholdSeconds = 60))
+        assertTrue(JwtUtility.isExpiringSoon(token, threshold = 60.seconds))
     }
 
     @Test
     fun `isExpiringSoon - token without exp claim treated as expired`() {
         val token = buildJwt("""{"sub":"user1"}""")
-        assertTrue(JwtUtility.isExpiringSoon(token, thresholdSeconds = 60))
+        assertTrue(JwtUtility.isExpiringSoon(token, threshold = 60.seconds))
     }
 
     @Test
     fun `isExpiringSoon - malformed token treated as expired`() {
-        assertTrue(JwtUtility.isExpiringSoon("invalid", thresholdSeconds = 60))
+        assertTrue(JwtUtility.isExpiringSoon("invalid", threshold = 60.seconds))
     }
 }

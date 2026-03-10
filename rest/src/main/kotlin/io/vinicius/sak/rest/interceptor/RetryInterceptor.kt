@@ -50,7 +50,7 @@ internal class RetryInterceptor(private val policy: RetryPolicy) : Interceptor {
 
             // Wait before next attempt (skip delay on the last attempt)
             if (attempt < policy.maxAttempts - 1) {
-                runBlocking { delay(policy.delayMillis) }
+                runBlocking { delay(policy.delay) }
             }
         }
 

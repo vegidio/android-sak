@@ -20,7 +20,8 @@ import okhttp3.OkHttpClient
 import okhttp3.logging.HttpLoggingInterceptor
 import retrofit2.Retrofit
 import retrofit2.converter.kotlinx.serialization.asConverterFactory
-import java.util.concurrent.TimeUnit
+import kotlin.time.Duration
+import kotlin.time.Duration.Companion.seconds
 
 /**
  * Main entry point for the SAK REST library. Owns the [Retrofit] and [OkHttpClient] instances
@@ -62,7 +63,7 @@ class RestClient(private val config: RestConfiguration) : AutoCloseable {
 
     private val responseCache: ResponseCache? =
         if (config.cachePolicy.enabled) {
-            ResponseCache(config.cachePolicy.ttlMillis, config.cachePolicy.maxEntries)
+            ResponseCache(config.cachePolicy.ttl, config.cachePolicy.maxEntries)
         } else null
 
     val okHttpClient: OkHttpClient by lazy { buildOkHttpClient() }
@@ -122,9 +123,9 @@ class RestClient(private val config: RestConfiguration) : AutoCloseable {
 
     private fun buildOkHttpClient(): OkHttpClient =
         OkHttpClient.Builder().apply {
-            connectTimeout(config.connectTimeoutMillis, TimeUnit.MILLISECONDS)
-            readTimeout(config.readTimeoutMillis, TimeUnit.MILLISECONDS)
-            writeTimeout(config.readTimeoutMillis, TimeUnit.MILLISECONDS)
+            connectTimeout(config.connectTimeout)
+            readTimeout(config.readTimeout)
+            writeTimeout(config.readTimeout)
 
             // 1. Cache interceptor — may short-circuit on HIT before any network call
             responseCache?.let { addInterceptor(CacheInterceptor(it)) }
@@ -166,12 +167,12 @@ class RestClient(private val config: RestConfiguration) : AutoCloseable {
     // region Private — Preemptive JWT refresh
 
     private fun startPreemptiveRefreshIfEnabled() {
-        if (config.preemptiveRefreshSeconds <= 0) return
+        if (config.preemptiveRefresh <= Duration.ZERO) return
         if (config.tokenProvider == null || config.tokenRefresher == null) return
 
         refreshJob = scope.launch {
             while (isActive) {
-                delay(PREEMPTIVE_POLL_INTERVAL_MS)
+                delay(PREEMPTIVE_POLL_INTERVAL)
                 checkAndPreemptivelyRefresh()
             }
         }
@@ -179,7 +180,7 @@ class RestClient(private val config: RestConfiguration) : AutoCloseable {
 
     private suspend fun checkAndPreemptivelyRefresh() {
         val token = currentToken ?: return
-        if (JwtUtility.isExpiringSoon(token, config.preemptiveRefreshSeconds)) {
+        if (JwtUtility.isExpiringSoon(token, config.preemptiveRefresh)) {
             val success = config.tokenRefresher!!.invoke()
             if (success) {
                 currentToken = config.tokenProvider?.invoke()
@@ -191,6 +192,6 @@ class RestClient(private val config: RestConfiguration) : AutoCloseable {
 
     private companion object {
         // How often the background loop checks token expiry
-        const val PREEMPTIVE_POLL_INTERVAL_MS = 30_000L
+        val PREEMPTIVE_POLL_INTERVAL = 30.seconds
     }
 }

@@ -2,6 +2,7 @@ package io.vinicius.sak.rest.cache
 
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlin.time.Duration
 
 /**
  * In-memory TTL cache for raw response bodies stored as strings.
@@ -11,11 +12,11 @@ import kotlinx.coroutines.sync.withLock
  * When [maxEntries] is exceeded, the oldest insertion-order entry is dropped (LRU-style),
  * using a [LinkedHashMap] which preserves insertion order.
  *
- * @param ttlMillis Time-to-live for each cached entry in milliseconds.
+ * @param ttl Time-to-live for each cached entry.
  * @param maxEntries Maximum number of entries before oldest-first eviction.
  */
 internal class ResponseCache(
-    private val ttlMillis: Long,
+    private val ttl: Duration,
     private val maxEntries: Int,
 ) {
     private data class Entry(val body: String, val expiresAt: Long)
@@ -43,7 +44,7 @@ internal class ResponseCache(
         if (store.size >= maxEntries) {
             store.iterator().also { it.next(); it.remove() }
         }
-        store[key] = Entry(body, System.currentTimeMillis() + ttlMillis)
+        store[key] = Entry(body, System.currentTimeMillis() + ttl.inWholeMilliseconds)
     }
 
     /**
