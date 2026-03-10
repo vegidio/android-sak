@@ -47,13 +47,14 @@ class RestErrorTest {
 
     @Test
     fun `RestError subtypes are sealed class members`() {
-        val errors: List<RestError> = listOf(
-            RestError.InvalidUrl("x"),
-            RestError.Network(RuntimeException()),
-            RestError.HttpError(400, null),
-            RestError.DecodingError(RuntimeException()),
-            RestError.TokenRefreshFailed,
-        )
+        val errors: List<RestError> =
+            listOf(
+                RestError.InvalidUrl("x"),
+                RestError.Network(RuntimeException()),
+                RestError.HttpError(400, null),
+                RestError.DecodingError(RuntimeException()),
+                RestError.TokenRefreshFailed,
+            )
         assertEquals(5, errors.size)
     }
 }

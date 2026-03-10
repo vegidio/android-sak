@@ -1,6 +1,7 @@
 plugins {
     id("android-library")
     id("publish")
+    id("quality")
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.serialization)
 }
@@ -8,17 +9,19 @@ plugins {
 android {
     namespace = "io.vinicius.sak.rest"
     compileSdk = 36
+    defaultConfig { minSdk = 26 }
 }
 
-kotlin {
-    jvmToolchain(17)
+kotlin { jvmToolchain(17) }
+
+ktfmt {
+    kotlinLangStyle()
+    maxWidth.set(120)
 }
 
 version = "0.1.0"
 
-publishing.publications.named<MavenPublication>("release") {
-    artifactId = "rest"
-}
+publishing.publications.named<MavenPublication>("release") { artifactId = "rest" }
 
 dependencies {
     api(libs.retrofit.core)

@@ -9,27 +9,25 @@ import okhttp3.Response
 import okhttp3.Route
 
 /**
- * OkHttp [Authenticator] that handles 401 Unauthorized responses by refreshing the JWT token
- * and retrying the original request with the updated token.
+ * OkHttp [Authenticator] that handles 401 Unauthorized responses by refreshing the JWT token and retrying the original
+ * request with the updated token.
  *
- * Thread safety: a [Mutex] ensures only one coroutine performs the token refresh at a time,
- * mirroring the `TokenRefreshCoordinator` actor from the iOS SAK implementation. When multiple
- * requests receive a 401 simultaneously, only the first one calls [tokenRefresher]; the rest
- * detect the already-updated token and skip the refresh.
+ * Thread safety: a [Mutex] ensures only one coroutine performs the token refresh at a time, mirroring the
+ * `TokenRefreshCoordinator` actor from the iOS SAK implementation. When multiple requests receive a 401 simultaneously,
+ * only the first one calls [tokenRefresher]; the rest detect the already-updated token and skip the refresh.
  *
- * Integration with [RetryInterceptor]: [RetryInterceptor] explicitly returns 401 responses
- * without retrying, so this Authenticator is the sole mechanism that handles 401s.
+ * Integration with [RetryInterceptor]: [RetryInterceptor] explicitly returns 401 responses without retrying, so this
+ * Authenticator is the sole mechanism that handles 401s.
  *
  * OkHttp only calls [authenticate] for 401 responses (not other status codes). It is set via
  * [okhttp3.OkHttpClient.Builder.authenticator], not via [okhttp3.OkHttpClient.Builder.addInterceptor].
  *
- * @param tokenProvider Non-suspend lambda that returns the current stored token.
- *                      Reads the `@Volatile currentToken` field on [io.vinicius.sak.rest.RestClient].
- * @param tokenRefresher Suspend lambda that performs the actual token refresh (HTTP call).
- *                       Should persist the new token and return true on success.
- * @param onTokenRefreshed Suspend lambda called after a successful refresh to obtain the new token.
- *                         Typically re-invokes [RestConfiguration.tokenProvider] after the refresher
- *                         has persisted the new token.
+ * @param tokenProvider Non-suspend lambda that returns the current stored token. Reads the `@Volatile currentToken`
+ *   field on [io.vinicius.sak.rest.RestClient].
+ * @param tokenRefresher Suspend lambda that performs the actual token refresh (HTTP call). Should persist the new token
+ *   and return true on success.
+ * @param onTokenRefreshed Suspend lambda called after a successful refresh to obtain the new token. Typically
+ *   re-invokes [RestConfiguration.tokenProvider] after the refresher has persisted the new token.
  */
 internal class AuthAuthenticator(
     private val tokenProvider: () -> String?,
@@ -52,9 +50,7 @@ internal class AuthAuthenticator(
         val newToken: String? = runBlocking {
             mutex.withLock {
                 val tokenBeforeLock = tokenProvider()
-                val tokenUsedInRequest = response.request
-                    .header("Authorization")
-                    ?.removePrefix("Bearer ")
+                val tokenUsedInRequest = response.request.header("Authorization")?.removePrefix("Bearer ")
 
                 // Another coroutine already refreshed while we waited for the mutex
                 if (tokenBeforeLock != null && tokenBeforeLock != tokenUsedInRequest) {
@@ -67,11 +63,7 @@ internal class AuthAuthenticator(
             }
         }
 
-        return newToken?.let { token ->
-            response.request.newBuilder()
-                .header("Authorization", "Bearer $token")
-                .build()
-        }
+        return newToken?.let { token -> response.request.newBuilder().header("Authorization", "Bearer $token").build() }
     }
 
     /** Counts how many times the response chain has been retried (via prior responses). */

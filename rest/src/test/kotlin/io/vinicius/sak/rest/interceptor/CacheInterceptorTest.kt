@@ -18,25 +18,17 @@ class CacheInterceptorTest {
 
     private val server = MockWebServer()
 
-    @Before
-    fun setUp() = server.start()
+    @Before fun setUp() = server.start()
 
-    @After
-    fun tearDown() = server.close()
+    @After fun tearDown() = server.close()
 
     private fun clientWith(cache: ResponseCache): OkHttpClient =
-        OkHttpClient.Builder()
-            .addInterceptor(CacheInterceptor(cache))
-            .build()
+        OkHttpClient.Builder().addInterceptor(CacheInterceptor(cache)).build()
 
-    private fun get(path: String = "/data"): Request =
-        Request.Builder().url(server.url(path)).build()
+    private fun get(path: String = "/data"): Request = Request.Builder().url(server.url(path)).build()
 
     private fun post(path: String = "/data"): Request =
-        Request.Builder()
-            .url(server.url(path))
-            .post("{}".toRequestBody())
-            .build()
+        Request.Builder().url(server.url(path)).post("{}".toRequestBody()).build()
 
     private fun response(code: Int, body: String? = null) =
         MockResponse.Builder().code(code).apply { body?.let { body(it) } }.build()

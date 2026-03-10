@@ -1,9 +1,6 @@
 package io.vinicius.sak.rest
 
-/**
- * Typed errors produced by [RestClient] and its interceptors.
- * Mirrors iOS SAK's RESTError enum.
- */
+/** Typed errors produced by [RestClient] and its interceptors */
 sealed class RestError : Exception() {
 
     /** The base URL or a composed request URL is malformed. */

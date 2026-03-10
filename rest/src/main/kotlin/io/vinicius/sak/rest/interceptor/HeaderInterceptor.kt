@@ -7,17 +7,17 @@ import okhttp3.Response
 import retrofit2.Invocation
 
 /**
- * OkHttp application interceptor that adds [defaultHeaders] to every outgoing request
- * and injects the Authorization Bearer token for authenticated endpoints.
+ * OkHttp application interceptor that adds [defaultHeaders] to every outgoing request and injects the Authorization
+ * Bearer token for authenticated endpoints.
  *
  * Header injection rules:
  * - Default headers are added only if not already present (per-request headers take precedence).
- * - The Authorization header is injected only when [tokenProvider] is non-null and the
- *   endpoint is not annotated with [@SkipAuth][io.vinicius.sak.rest.annotation.SkipAuth].
+ * - The Authorization header is injected only when [tokenProvider] is non-null and the endpoint is not annotated with
+ *   [@SkipAuth][io.vinicius.sak.rest.annotation.SkipAuth].
  *
  * [tokenProvider] is a plain (non-suspend) lambda because OkHttp interceptors are synchronous.
- * [io.vinicius.sak.rest.RestClient] exposes its `@Volatile currentToken` field via this lambda,
- * so no blocking calls are needed here.
+ * [io.vinicius.sak.rest.RestClient] exposes its `@Volatile currentToken` field via this lambda, so no blocking calls
+ * are needed here.
  */
 internal class HeaderInterceptor(
     private val defaultHeaders: Map<String, String>,
@@ -46,8 +46,8 @@ internal class HeaderInterceptor(
 }
 
 /**
- * Reads Retrofit 3's automatically-attached [Invocation] tag to detect [@SkipAuth].
- * This works out of the box with Retrofit 3 — no custom CallAdapter is needed.
+ * Reads Retrofit 3's automatically-attached [Invocation] tag to detect [@SkipAuth]. This works out of the box with
+ * Retrofit 3 — no custom CallAdapter is needed.
  */
 internal fun Request.hasSkipAuth(): Boolean {
     val invocation = tag(Invocation::class.java) ?: return false

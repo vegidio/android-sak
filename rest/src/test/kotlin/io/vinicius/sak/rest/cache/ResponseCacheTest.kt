@@ -1,12 +1,12 @@
 package io.vinicius.sak.rest.cache
 
+import kotlin.time.Duration.Companion.milliseconds
+import kotlin.time.Duration.Companion.seconds
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
-import kotlin.time.Duration.Companion.milliseconds
-import kotlin.time.Duration.Companion.seconds
 
 class ResponseCacheTest {
 
@@ -63,9 +63,7 @@ class ResponseCacheTest {
     @Test
     fun `concurrent put and get do not produce data races`() = runTest {
         val cache = ResponseCache(ttl = 60.seconds, maxEntries = 100)
-        val jobs = (1..50).map { i ->
-            launch { cache.put("key$i", "value$i") }
-        }
+        val jobs = (1..50).map { i -> launch { cache.put("key$i", "value$i") } }
         jobs.forEach { it.join() }
         // All 50 entries should be retrievable
         for (i in 1..50) {

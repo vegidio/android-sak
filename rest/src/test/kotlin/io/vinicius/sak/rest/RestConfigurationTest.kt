@@ -1,10 +1,10 @@
 package io.vinicius.sak.rest
 
+import kotlin.time.Duration.Companion.seconds
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Test
-import kotlin.time.Duration.Companion.seconds
 
 class RestConfigurationTest {
 
@@ -40,15 +40,16 @@ class RestConfigurationTest {
 
     @Test
     fun `RestConfiguration stores all fields correctly`() {
-        val config = RestConfiguration(
-            baseUrl = "https://api.example.com/",
-            defaultHeaders = mapOf("X-App" to "1.0"),
-            retryPolicy = RetryPolicy(maxAttempts = 1),
-            cachePolicy = CachePolicy(enabled = true),
-            preemptiveRefresh = 120.seconds,
-            connectTimeout = 10.seconds,
-            readTimeout = 20.seconds,
-        )
+        val config =
+            RestConfiguration(
+                baseUrl = "https://api.example.com/",
+                defaultHeaders = mapOf("X-App" to "1.0"),
+                retryPolicy = RetryPolicy(maxAttempts = 1),
+                cachePolicy = CachePolicy(enabled = true),
+                preemptiveRefresh = 120.seconds,
+                connectTimeout = 10.seconds,
+                readTimeout = 20.seconds,
+            )
         assertEquals("https://api.example.com/", config.baseUrl)
         assertEquals(mapOf("X-App" to "1.0"), config.defaultHeaders)
         assertEquals(1, config.retryPolicy.maxAttempts)

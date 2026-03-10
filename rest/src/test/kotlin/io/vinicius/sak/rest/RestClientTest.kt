@@ -1,5 +1,7 @@
 package io.vinicius.sak.rest
 
+import java.util.concurrent.atomic.AtomicInteger
+import kotlin.time.Duration.Companion.seconds
 import mockwebserver3.MockResponse
 import mockwebserver3.MockWebServer
 import org.junit.After
@@ -9,18 +11,14 @@ import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import retrofit2.http.GET
-import java.util.concurrent.atomic.AtomicInteger
-import kotlin.time.Duration.Companion.seconds
 
 class RestClientTest {
 
     private val server = MockWebServer()
 
-    @Before
-    fun setUp() = server.start()
+    @Before fun setUp() = server.start()
 
-    @After
-    fun tearDown() = server.close()
+    @After fun tearDown() = server.close()
 
     private fun baseUrl() = server.url("/").toString()
 
@@ -28,8 +26,7 @@ class RestClientTest {
         MockResponse.Builder().code(code).apply { body?.let { body(it) } }.build()
 
     interface TestApi {
-        @GET("data")
-        suspend fun getData(): String
+        @GET("data") suspend fun getData(): String
     }
 
     @Test
@@ -43,15 +40,9 @@ class RestClientTest {
     @Test
     fun `default headers are sent with every request`() {
         server.enqueue(response(200, "\"ok\""))
-        val client = RestClient(
-            RestConfiguration(
-                baseUrl = baseUrl(),
-                defaultHeaders = mapOf("X-App-Version" to "2.0"),
-            )
-        )
-        client.okHttpClient.newCall(
-            okhttp3.Request.Builder().url(server.url("/data")).build()
-        ).execute()
+        val client =
+            RestClient(RestConfiguration(baseUrl = baseUrl(), defaultHeaders = mapOf("X-App-Version" to "2.0")))
+        client.okHttpClient.newCall(okhttp3.Request.Builder().url(server.url("/data")).build()).execute()
         val recorded = server.takeRequest()
         assertEquals("2.0", recorded.headers["X-App-Version"])
         client.close()
@@ -60,13 +51,17 @@ class RestClientTest {
     @Test
     fun `refreshToken calls tokenRefresher and updates currentToken`() {
         var storedToken = "old-token"
-        val client = RestClient(
-            RestConfiguration(
-                baseUrl = baseUrl(),
-                tokenProvider = { storedToken },
-                tokenRefresher = { storedToken = "new-token"; true },
+        val client =
+            RestClient(
+                RestConfiguration(
+                    baseUrl = baseUrl(),
+                    tokenProvider = { storedToken },
+                    tokenRefresher = {
+                        storedToken = "new-token"
+                        true
+                    },
+                )
             )
-        )
         Thread.sleep(100)
         assertEquals("old-token", client.currentToken)
 
@@ -79,14 +74,18 @@ class RestClientTest {
     @Test
     fun `close cancels preemptive refresh with no further calls`() {
         val refreshCount = AtomicInteger(0)
-        val client = RestClient(
-            RestConfiguration(
-                baseUrl = baseUrl(),
-                tokenProvider = { "token" },
-                tokenRefresher = { refreshCount.incrementAndGet(); true },
-                preemptiveRefresh = 1.seconds,
+        val client =
+            RestClient(
+                RestConfiguration(
+                    baseUrl = baseUrl(),
+                    tokenProvider = { "token" },
+                    tokenRefresher = {
+                        refreshCount.incrementAndGet()
+                        true
+                    },
+                    preemptiveRefresh = 1.seconds,
+                )
             )
-        )
         client.close()
         Thread.sleep(200)
         assertEquals(0, refreshCount.get())
@@ -98,21 +97,28 @@ class RestClientTest {
         server.enqueue(response(200, "ok"))
 
         var storedToken = "old-token"
-        val client = RestClient(
-            RestConfiguration(
-                baseUrl = baseUrl(),
-                tokenProvider = { storedToken },
-                tokenRefresher = { storedToken = "refreshed-token"; true },
+        val client =
+            RestClient(
+                RestConfiguration(
+                    baseUrl = baseUrl(),
+                    tokenProvider = { storedToken },
+                    tokenRefresher = {
+                        storedToken = "refreshed-token"
+                        true
+                    },
+                )
             )
-        )
         Thread.sleep(100)
 
-        val result = client.okHttpClient.newCall(
-            okhttp3.Request.Builder()
-                .url(server.url("/protected"))
-                .header("Authorization", "Bearer old-token")
-                .build()
-        ).execute()
+        val result =
+            client.okHttpClient
+                .newCall(
+                    okhttp3.Request.Builder()
+                        .url(server.url("/protected"))
+                        .header("Authorization", "Bearer old-token")
+                        .build()
+                )
+                .execute()
 
         assertEquals(200, result.code)
         assertEquals(2, server.requestCount)
@@ -125,12 +131,10 @@ class RestClientTest {
     fun `end-to-end cached response served on second GET`() {
         server.enqueue(response(200, """{"id":1}"""))
 
-        val client = RestClient(
-            RestConfiguration(
-                baseUrl = baseUrl(),
-                cachePolicy = CachePolicy(enabled = true, ttl = 60.seconds),
+        val client =
+            RestClient(
+                RestConfiguration(baseUrl = baseUrl(), cachePolicy = CachePolicy(enabled = true, ttl = 60.seconds))
             )
-        )
 
         val request = okhttp3.Request.Builder().url(server.url("/data")).build()
         client.okHttpClient.newCall(request).execute().close()

@@ -1,6 +1,7 @@
 package io.vinicius.sak.rest.interceptor
 
 import io.vinicius.sak.rest.RetryPolicy
+import java.io.IOException
 import kotlin.time.Duration
 import mockwebserver3.MockResponse
 import mockwebserver3.MockWebServer
@@ -10,22 +11,17 @@ import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Before
 import org.junit.Test
-import java.io.IOException
 
 class RetryInterceptorTest {
 
     private val server = MockWebServer()
 
-    @Before
-    fun setUp() = server.start()
+    @Before fun setUp() = server.start()
 
-    @After
-    fun tearDown() = server.close()
+    @After fun tearDown() = server.close()
 
     private fun clientWith(policy: RetryPolicy): OkHttpClient =
-        OkHttpClient.Builder()
-            .addInterceptor(RetryInterceptor(policy))
-            .build()
+        OkHttpClient.Builder().addInterceptor(RetryInterceptor(policy)).build()
 
     private fun get(): Request = Request.Builder().url(server.url("/test")).build()
 
@@ -85,9 +81,10 @@ class RetryInterceptorTest {
     @Test(expected = IOException::class)
     fun `IOException is retried and rethrown after maxAttempts`() {
         server.close()
-        val client = OkHttpClient.Builder()
-            .addInterceptor(RetryInterceptor(RetryPolicy(maxAttempts = 2, delay = Duration.ZERO)))
-            .build()
+        val client =
+            OkHttpClient.Builder()
+                .addInterceptor(RetryInterceptor(RetryPolicy(maxAttempts = 2, delay = Duration.ZERO)))
+                .build()
         client.newCall(Request.Builder().url("http://localhost:1").build()).execute()
     }
 }

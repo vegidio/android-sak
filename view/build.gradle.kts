@@ -1,15 +1,24 @@
 plugins {
     id("android-library")
     id("publish")
+    id("quality")
     id("org.jetbrains.kotlin.plugin.compose")
 }
 
 android {
     namespace = "io.vinicius.sak.view"
     compileSdk = 36
+    defaultConfig {
+        minSdk = 26
+    }
     buildFeatures {
         compose = true
     }
+}
+
+ktfmt {
+    kotlinLangStyle()
+    maxWidth.set(120)
 }
 
 version = "0.1.0"

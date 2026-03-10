@@ -6,6 +6,8 @@ import io.vinicius.sak.rest.interceptor.CacheInterceptor
 import io.vinicius.sak.rest.interceptor.HeaderInterceptor
 import io.vinicius.sak.rest.interceptor.RetryInterceptor
 import io.vinicius.sak.rest.util.JwtUtility
+import kotlin.time.Duration
+import kotlin.time.Duration.Companion.seconds
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -20,16 +22,13 @@ import okhttp3.OkHttpClient
 import okhttp3.logging.HttpLoggingInterceptor
 import retrofit2.Retrofit
 import retrofit2.converter.kotlinx.serialization.asConverterFactory
-import kotlin.time.Duration
-import kotlin.time.Duration.Companion.seconds
 
 /**
- * Main entry point for the SAK REST library. Owns the [Retrofit] and [OkHttpClient] instances
- * and drives all cross-cutting concerns: default headers, caching, retry, JWT injection,
- * reactive 401 token refresh, and preemptive token refresh.
+ * Main entry point for the SAK REST library. Owns the [Retrofit] and [OkHttpClient] instances and drives all
+ * cross-cutting concerns: default headers, caching, retry, JWT injection, reactive 401 token refresh, and preemptive
+ * token refresh.
  *
- * Mirrors iOS SAK's `RESTClient`. Construct once (application/singleton scope) and share:
- *
+ * Construct once (application/singleton scope) and share:
  * ```kotlin
  * val client = RestClient(
  *     RestConfiguration(
@@ -42,15 +41,14 @@ import kotlin.time.Duration.Companion.seconds
  * val userApi = client.createService<UserApiService>()
  * ```
  *
- * Call [close] when the client is no longer needed (e.g., on logout or in ViewModel.onCleared)
- * to cancel the background refresh coroutine and release OkHttp connections.
+ * Call [close] when the client is no longer needed (e.g., on logout or in ViewModel.onCleared) to cancel the background
+ * refresh coroutine and release OkHttp connections.
  */
 class RestClient(private val config: RestConfiguration) : AutoCloseable {
 
     // Current Bearer token — updated by init, AuthAuthenticator, and the preemptive refresher.
     // @Volatile ensures cross-thread visibility without a lock for simple reads.
-    @Volatile
-    internal var currentToken: String? = null
+    @Volatile internal var currentToken: String? = null
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var refreshJob: Job? = null
@@ -85,28 +83,22 @@ class RestClient(private val config: RestConfiguration) : AutoCloseable {
 
     // region Public API
 
-    /**
-     * Creates and returns a type-safe Retrofit service implementation of [T].
-     */
+    /** Creates and returns a type-safe Retrofit service implementation of [T]. */
     inline fun <reified T : Any> createService(): T = retrofit.create(T::class.java)
 
     /**
-     * Forces an immediate token refresh regardless of expiry.
-     * Updates [currentToken] on success.
+     * Forces an immediate token refresh regardless of expiry. Updates [currentToken] on success.
      *
      * @return true if the refresh succeeded, false otherwise.
      */
     suspend fun refreshToken(): Boolean {
         val success = config.tokenRefresher?.invoke() ?: return false
-        if (success) {
-            currentToken = config.tokenProvider?.invoke()
-        }
+        if (success) currentToken = config.tokenProvider?.invoke()
         return success
     }
 
     /**
-     * Cancels the preemptive refresh background coroutine and releases OkHttp resources.
-     * Safe to call multiple times.
+     * Cancels the preemptive refresh background coroutine and releases OkHttp resources. Safe to call multiple times.
      */
     override fun close() {
         refreshJob?.cancel()
@@ -122,45 +114,40 @@ class RestClient(private val config: RestConfiguration) : AutoCloseable {
     // region Private — OkHttp construction
 
     private fun buildOkHttpClient(): OkHttpClient =
-        OkHttpClient.Builder().apply {
-            connectTimeout(config.connectTimeout)
-            readTimeout(config.readTimeout)
-            writeTimeout(config.readTimeout)
+        OkHttpClient.Builder()
+            .apply {
+                connectTimeout(config.connectTimeout)
+                readTimeout(config.readTimeout)
+                writeTimeout(config.readTimeout)
 
-            // 1. Cache interceptor — may short-circuit on HIT before any network call
-            responseCache?.let { addInterceptor(CacheInterceptor(it)) }
+                // 1. Cache interceptor — may short-circuit on HIT before any network call
+                responseCache?.let { addInterceptor(CacheInterceptor(it)) }
 
-            // 2. Default headers + Bearer token injection
-            addInterceptor(
-                HeaderInterceptor(
-                    defaultHeaders = config.defaultHeaders,
-                    tokenProvider = { currentToken },
+                // 2. Default headers + Bearer token injection
+                addInterceptor(
+                    HeaderInterceptor(defaultHeaders = config.defaultHeaders, tokenProvider = { currentToken })
                 )
-            )
 
-            // 3. Retry on IOException / 5xx; explicitly skips 401
-            addInterceptor(RetryInterceptor(config.retryPolicy))
+                // 3. Retry on IOException / 5xx; explicitly skips 401
+                addInterceptor(RetryInterceptor(config.retryPolicy))
 
-            // 4. 401 → token refresh → retry (OkHttp Authenticator, separate from interceptors)
-            config.tokenRefresher?.let {
-                authenticator(
-                    AuthAuthenticator(
-                        tokenProvider = { currentToken },
-                        tokenRefresher = it,
-                        onTokenRefreshed = {
-                            config.tokenProvider?.invoke()?.also { token -> currentToken = token }
-                        },
+                // 4. 401 → token refresh → retry (OkHttp Authenticator, separate from interceptors)
+                config.tokenRefresher?.let {
+                    authenticator(
+                        AuthAuthenticator(
+                            tokenProvider = { currentToken },
+                            tokenRefresher = it,
+                            onTokenRefreshed = {
+                                config.tokenProvider?.invoke()?.also { token -> currentToken = token }
+                            },
+                        )
                     )
-                )
-            }
-
-            // 5. HTTP logging — outermost layer for maximum visibility
-            addInterceptor(
-                HttpLoggingInterceptor().apply {
-                    level = HttpLoggingInterceptor.Level.BODY
                 }
-            )
-        }.build()
+
+                // 5. HTTP logging — outermost layer for maximum visibility
+                addInterceptor(HttpLoggingInterceptor().apply { level = HttpLoggingInterceptor.Level.BODY })
+            }
+            .build()
 
     // endregion
 
@@ -170,12 +157,13 @@ class RestClient(private val config: RestConfiguration) : AutoCloseable {
         if (config.preemptiveRefresh <= Duration.ZERO) return
         if (config.tokenProvider == null || config.tokenRefresher == null) return
 
-        refreshJob = scope.launch {
-            while (isActive) {
-                delay(PREEMPTIVE_POLL_INTERVAL)
-                checkAndPreemptivelyRefresh()
+        refreshJob =
+            scope.launch {
+                while (isActive) {
+                    delay(PREEMPTIVE_POLL_INTERVAL)
+                    checkAndPreemptivelyRefresh()
+                }
             }
-        }
     }
 
     private suspend fun checkAndPreemptivelyRefresh() {
