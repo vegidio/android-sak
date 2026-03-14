@@ -1,10 +1,14 @@
 package io.vinicius.sak.util
 
 import kotlinx.coroutines.channels.BufferOverflow
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.channels.ChannelResult
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.receiveAsFlow
 
 // Based on the best practice of not exposing mutable types:
 // https://developer.android.com/kotlin/coroutines/coroutines-best-practices#mutable-types
@@ -12,6 +16,8 @@ import kotlinx.coroutines.flow.StateFlow
 sealed class PrivateStateFlow<T>(flow: StateFlow<T>) : StateFlow<T> by flow
 
 sealed class PrivateSharedFlow<T>(flow: SharedFlow<T>) : SharedFlow<T> by flow
+
+sealed class PrivateChannel<T>(flow: Flow<T>) : Flow<T> by flow
 
 private class PrivateStateFlowImpl<T>(initial: T, val wrapped: MutableStateFlow<T> = MutableStateFlow(initial)) :
     PrivateStateFlow<T>(wrapped)
@@ -22,6 +28,13 @@ private class PrivateSharedFlowImpl<T>(
     onBufferOverflow: BufferOverflow,
     val wrapped: MutableSharedFlow<T> = MutableSharedFlow(replay, extraBufferCapacity, onBufferOverflow),
 ) : PrivateSharedFlow<T>(wrapped)
+
+private class PrivateChannelImpl<T>(
+    capacity: Int,
+    onBufferOverflow: BufferOverflow,
+    onUndeliveredElement: ((T) -> Unit)?,
+    val wrapped: Channel<T> = Channel(capacity, onBufferOverflow, onUndeliveredElement),
+) : PrivateChannel<T>(wrapped.receiveAsFlow())
 
 // NOTE: Mutation access is scoped to the implementing class boundary by convention,
 // not enforced by the type system. Do not implement this interface in classes
@@ -48,5 +61,21 @@ interface PrivateFlow {
     fun <T> PrivateSharedFlow<T>.tryEmit(value: T) =
         when (this) {
             is PrivateSharedFlowImpl -> wrapped.tryEmit(value)
+        }
+
+    fun <T> privateChannel(
+        capacity: Int = Channel.BUFFERED,
+        onBufferOverflow: BufferOverflow = BufferOverflow.SUSPEND,
+        onUndeliveredElement: ((T) -> Unit)? = null,
+    ): PrivateChannel<T> = PrivateChannelImpl(capacity, onBufferOverflow, onUndeliveredElement)
+
+    suspend fun <T> PrivateChannel<T>.send(value: T) =
+        when (this) {
+            is PrivateChannelImpl -> wrapped.send(value)
+        }
+
+    fun <T> PrivateChannel<T>.trySend(value: T): ChannelResult<Unit> =
+        when (this) {
+            is PrivateChannelImpl -> wrapped.trySend(value)
         }
 }

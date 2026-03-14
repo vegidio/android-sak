@@ -105,6 +105,40 @@ private val _events = privateSharedFlow<Event>(
 | `extraBufferCapacity` | `0` | Additional buffer slots beyond replay |
 | `onBufferOverflow` | `SUSPEND` | What to do when the buffer is full |
 
+## PrivateChannel
+
+For one-shot events that should not be replayed to new collectors, use `privateChannel`:
+
+```kotlin
+class SignInViewModel : ViewModel(), PrivateFlow {
+    val effect = privateChannel<SignInContract.Effect>()
+
+    fun onSignInSuccess() {
+        viewModelScope.launch {
+            effect.send(SignInContract.Effect.NavigateToHome)
+        }
+    }
+}
+```
+
+Outside the ViewModel, `effect` is a read-only `Flow<T>`. Inside, `.send()` and `.trySend()` are available because `PrivateFlow` is implemented.
+
+### Buffer configuration
+
+```kotlin
+val effect = privateChannel<Effect>(
+    capacity = Channel.BUFFERED,
+    onBufferOverflow = BufferOverflow.DROP_OLDEST,
+    onUndeliveredElement = { /* handle undelivered */ },
+)
+```
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `capacity` | `Channel.BUFFERED` | Channel buffer capacity |
+| `onBufferOverflow` | `SUSPEND` | What to do when the buffer is full |
+| `onUndeliveredElement` | `null` | Called for elements that were never delivered |
+
 ## Encapsulation note
 
 Mutation access is enforced by convention, not by the type system. Any class that implements `PrivateFlow` can call `.set()`, `.emit()`, and `.tryEmit()` on any `PrivateStateFlow` or `PrivateSharedFlow` instance it holds a reference to. Only implement `PrivateFlow` in classes that own the flow.

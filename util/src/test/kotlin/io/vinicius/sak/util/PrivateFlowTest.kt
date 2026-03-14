@@ -5,6 +5,7 @@ package io.vinicius.sak.util
 import app.cash.turbine.test
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.channels.BufferOverflow
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.test.runTest
@@ -13,7 +14,6 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class PrivateFlowTest {
-
     // Helper class that implements PrivateFlow, simulating a ViewModel
     private class FakeViewModel : PrivateFlow {
         val counter = privateStateFlow(0)
@@ -49,6 +49,14 @@ class PrivateFlowTest {
         fun trySendBufferedEvent(value: String): Boolean {
             return bufferedEvents.tryEmit(value)
         }
+
+        val effects = privateChannel<String>()
+
+        suspend fun sendEffect(value: String) {
+            effects.send(value)
+        }
+
+        fun trySendEffect(value: String) = effects.trySend(value)
     }
 
     // region PrivateStateFlow
@@ -214,6 +222,51 @@ class PrivateFlowTest {
             assertEquals("same", awaitItem())
             cancelAndIgnoreRemainingEvents()
         }
+    }
+
+    // endregion
+
+    // region PrivateChannel
+
+    @Test
+    fun `privateChannel is a Flow`() {
+        val vm = FakeViewModel()
+        assertTrue(vm.effects is Flow<*>)
+    }
+
+    @Test
+    fun `privateChannel is a PrivateChannel`() {
+        val vm = FakeViewModel()
+        assertTrue(vm.effects is PrivateChannel<*>)
+    }
+
+    @Test
+    fun `channel send delivers value to collector`() = runTest {
+        val vm = FakeViewModel()
+        vm.effects.test {
+            vm.sendEffect("hello")
+            assertEquals("hello", awaitItem())
+            vm.sendEffect("world")
+            assertEquals("world", awaitItem())
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `channel trySend delivers value to collector`() = runTest {
+        val vm = FakeViewModel()
+        vm.effects.test {
+            vm.trySendEffect("test")
+            assertEquals("test", awaitItem())
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `privateChannel exposes read-only Flow interface`() {
+        val vm = FakeViewModel()
+        val flow: Flow<String> = vm.effects
+        assertTrue(flow is Flow<*>)
     }
 
     // endregion
