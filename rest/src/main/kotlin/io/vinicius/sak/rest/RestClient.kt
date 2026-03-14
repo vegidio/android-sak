@@ -16,6 +16,7 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.Json
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
@@ -125,7 +126,13 @@ class RestClient(private val config: RestConfiguration) : AutoCloseable {
 
                 // 2. Default headers + Bearer token injection
                 addInterceptor(
-                    HeaderInterceptor(defaultHeaders = config.defaultHeaders, tokenProvider = { currentToken })
+                    HeaderInterceptor(
+                        defaultHeaders = config.defaultHeaders,
+                        tokenProvider =
+                            config.tokenProvider?.let { provider ->
+                                { runBlocking { provider() }.also { token -> currentToken = token } }
+                            },
+                    )
                 )
 
                 // 3. Retry on IOException / 5xx; explicitly skips 401
