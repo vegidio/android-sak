@@ -6,11 +6,11 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.Serializable
 import mockwebserver3.MockResponse
 import mockwebserver3.MockWebServer
-import org.junit.After
-import org.junit.Assert.assertEquals
-import org.junit.Assert.assertNull
-import org.junit.Before
-import org.junit.Test
+import org.junit.jupiter.api.AfterEach
+import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertNull
+import org.junit.jupiter.api.BeforeEach
+import org.junit.jupiter.api.Test
 import retrofit2.http.Body
 import retrofit2.http.GET
 import retrofit2.http.POST
@@ -54,9 +54,9 @@ interface TestApi {
 class ServiceClientTest {
     private val server = MockWebServer()
 
-    @Before fun setUp() = server.start()
+    @BeforeEach fun setUp() = server.start()
 
-    @After fun tearDown() = server.close()
+    @AfterEach fun tearDown() = server.close()
 
     private fun baseUrl() = server.url("/").toString()
 

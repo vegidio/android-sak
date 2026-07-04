@@ -1,8 +1,8 @@
 package io.vinicius.sak.rest
 
-import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
-import org.junit.Test
+import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertFalse
+import org.junit.jupiter.api.Test
 import kotlin.time.Duration.Companion.seconds
 
 class RestPoliciesTest {

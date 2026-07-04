@@ -6,20 +6,20 @@ import mockwebserver3.MockWebServer
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
-import org.junit.After
-import org.junit.Assert.assertEquals
-import org.junit.Assert.assertNull
-import org.junit.Before
-import org.junit.Test
+import org.junit.jupiter.api.AfterEach
+import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertNull
+import org.junit.jupiter.api.BeforeEach
+import org.junit.jupiter.api.Test
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
 
 class CacheInterceptorTest {
     private val server = MockWebServer()
 
-    @Before fun setUp() = server.start()
+    @BeforeEach fun setUp() = server.start()
 
-    @After fun tearDown() = server.close()
+    @AfterEach fun tearDown() = server.close()
 
     private fun clientWith(cache: ResponseCache): OkHttpClient =
         OkHttpClient.Builder().addInterceptor(CacheInterceptor(cache)).build()

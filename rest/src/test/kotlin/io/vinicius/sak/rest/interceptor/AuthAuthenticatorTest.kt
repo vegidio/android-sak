@@ -7,10 +7,10 @@ import mockwebserver3.MockResponse
 import mockwebserver3.MockWebServer
 import okhttp3.OkHttpClient
 import okhttp3.Request
-import org.junit.After
-import org.junit.Assert.assertEquals
-import org.junit.Before
-import org.junit.Test
+import org.junit.jupiter.api.AfterEach
+import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.BeforeEach
+import org.junit.jupiter.api.Test
 import retrofit2.Invocation
 import java.lang.reflect.Method
 import java.util.concurrent.atomic.AtomicInteger
@@ -18,9 +18,9 @@ import java.util.concurrent.atomic.AtomicInteger
 class AuthAuthenticatorTest {
     private val server = MockWebServer()
 
-    @Before fun setUp() = server.start()
+    @BeforeEach fun setUp() = server.start()
 
-    @After fun tearDown() = server.close()
+    @AfterEach fun tearDown() = server.close()
 
     private fun clientWith(
         tokenProvider: () -> String? = { "old-token" },

@@ -5,19 +5,20 @@ import mockwebserver3.MockResponse
 import mockwebserver3.MockWebServer
 import okhttp3.OkHttpClient
 import okhttp3.Request
-import org.junit.After
-import org.junit.Assert.assertEquals
-import org.junit.Before
-import org.junit.Test
+import org.junit.jupiter.api.AfterEach
+import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.BeforeEach
+import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.assertThrows
 import java.io.IOException
 import kotlin.time.Duration
 
 class RetryInterceptorTest {
     private val server = MockWebServer()
 
-    @Before fun setUp() = server.start()
+    @BeforeEach fun setUp() = server.start()
 
-    @After fun tearDown() = server.close()
+    @AfterEach fun tearDown() = server.close()
 
     private fun clientWith(policy: RetryPolicy): OkHttpClient =
         OkHttpClient.Builder().addInterceptor(RetryInterceptor(policy)).build()
@@ -83,7 +84,7 @@ class RetryInterceptorTest {
         assertEquals(1, server.requestCount)
     }
 
-    @Test(expected = IOException::class)
+    @Test
     fun `IOException is retried and rethrown after maxAttempts`() {
         server.close()
         val client =
@@ -91,6 +92,8 @@ class RetryInterceptorTest {
                 .Builder()
                 .addInterceptor(RetryInterceptor(RetryPolicy(maxAttempts = 2, delay = Duration.ZERO)))
                 .build()
-        client.newCall(Request.Builder().url("http://localhost:1").build()).execute()
+        assertThrows<IOException> {
+            client.newCall(Request.Builder().url("http://localhost:1").build()).execute()
+        }
     }
 }

@@ -2,20 +2,20 @@ package io.vinicius.sak.rest
 
 import mockwebserver3.MockResponse
 import mockwebserver3.MockWebServer
-import org.junit.After
-import org.junit.Assert.assertEquals
-import org.junit.Assert.assertTrue
-import org.junit.Before
-import org.junit.Test
+import org.junit.jupiter.api.AfterEach
+import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertTrue
+import org.junit.jupiter.api.BeforeEach
+import org.junit.jupiter.api.Test
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.time.Duration.Companion.seconds
 
 class RestClientTest {
     private val server = MockWebServer()
 
-    @Before fun setUp() = server.start()
+    @BeforeEach fun setUp() = server.start()
 
-    @After fun tearDown() = server.close()
+    @AfterEach fun tearDown() = server.close()
 
     private fun baseUrl() = server.url("/").toString()
 
