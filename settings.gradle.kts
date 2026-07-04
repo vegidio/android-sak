@@ -22,3 +22,4 @@ dependencyResolutionManagement {
 rootProject.name = "android-sak"
 
 include(":rest")
+include(":rest-compiler")

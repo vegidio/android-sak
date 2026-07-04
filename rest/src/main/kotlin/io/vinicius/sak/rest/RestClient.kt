@@ -29,7 +29,10 @@ import kotlin.time.Duration.Companion.seconds
  * cross-cutting concerns: default headers, caching, retry, JWT injection, reactive 401 token refresh, and preemptive
  * token refresh.
  *
- * Construct once (application/singleton scope) and share:
+ * Rather than instantiating this class directly, annotate a service interface with
+ * [io.vinicius.sak.rest.annotation.Service]; the `rest-compiler` KSP processor generates a `<Name>Client` that owns a
+ * [RestClient] for you. The generated client also exposes a secondary constructor taking an existing [RestClient], so
+ * several services can share one instance (and its single token-refresh loop):
  * ```kotlin
  * val client = RestClient(
  *     RestConfiguration(
@@ -39,7 +42,7 @@ import kotlin.time.Duration.Companion.seconds
  *         tokenRefresher = { authService.refresh(); true },
  *     )
  * )
- * val userApi = client.createService<UserApiService>()
+ * val userApi = UserServiceClient(client)
  * ```
  *
  * Call [close] when the client is no longer needed (e.g., on logout or in ViewModel.onCleared) to cancel the background
@@ -87,9 +90,6 @@ class RestClient(
     }
 
     // region Public API
-
-    /** Creates and returns a type-safe Retrofit service implementation of [T]. */
-    inline fun <reified T : Any> createService(): T = retrofit.create(T::class.java)
 
     /**
      * Forces an immediate token refresh regardless of expiry. Updates [currentToken] on success.

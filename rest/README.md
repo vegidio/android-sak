@@ -2,41 +2,63 @@
 
 A high-level HTTP client for REST APIs built on [Retrofit](https://github.com/square/retrofit) and [OkHttp](https://github.com/square/okhttp). Handles retry, caching, default headers, and automatic token refresh so you only write request logic.
 
+You declare your API as an interface annotated with `@Service`; at compile time the `rest-compiler` KSP processor generates a `<Name>Client` for you. You declare each method's **body type** as its return type, and the generated client returns that body wrapped in a `RestResponse<T>` (body + status code + headers).
+
+## Setup
+
+The generated clients are produced by a KSP processor, so a consuming module applies the KSP plugin and adds both artifacts:
+
+```kotlin
+plugins {
+    id("com.google.devtools.ksp") version "2.3.9"
+}
+
+dependencies {
+    implementation("io.vinicius.sak:rest:<version>")
+    ksp("io.vinicius.sak:rest-compiler:<version>")
+}
+```
+
 ## Quick start
 
 ```kotlin
+import io.vinicius.sak.rest.annotation.Service
+
 @Serializable
 data class User(val id: Int, val name: String)
 
+@Service
 interface UserService {
     @GET("users/{id}")
-    suspend fun getUser(@Path("id") id: Int): RestResponse<User>
+    suspend fun getUser(@Path("id") id: Int): User
 }
 
-val client = RestClient(RestConfiguration(baseUrl = "https://api.example.com/"))
-val service = client.createService<UserService>()
+val service = UserServiceClient(RestConfiguration(baseUrl = "https://api.example.com/"))
 
-val response = service.getUser(1)
-println(response.body.name)    // "Alice"
-println(response.statusCode)  // 200
+val response = service.getUser(1)   // RestResponse<User>
+println(response.body.name)         // "Alice"
+println(response.statusCode)        // 200
 ```
+
+Annotating `UserService` with `@Service` generates a `UserServiceClient` class. You declare `getUser` as returning `User`; calling it on the generated client returns `RestResponse<User>`.
 
 ## Sending requests
 
-Define your API as a Retrofit service interface, then use `createService<T>()` to get a type-safe implementation.
+Define your API as an interface annotated with `@Service`, using the standard Retrofit request annotations (`@GET`, `@POST`, `@Path`, `@Query`, `@Body`, `@Header`, …). Every method must be `suspend`.
 
 ### GET with query parameters
 
 ```kotlin
+@Service
 interface UserService {
     @GET("users")
     suspend fun listUsers(
         @Query("page") page: Int,
         @Query("limit") limit: Int,
-    ): RestResponse<List<User>>
+    ): List<User>
 }
 
-val response = service.listUsers(page = 1, limit = 20)
+val response = service.listUsers(page = 1, limit = 20)   // RestResponse<List<User>>
 ```
 
 ### POST with auto-encoded body
@@ -47,12 +69,13 @@ Pass any `@Serializable` value as `@Body` — it is JSON-encoded automatically a
 @Serializable
 data class NewUser(val name: String)
 
+@Service
 interface UserService {
     @POST("users")
-    suspend fun createUser(@Body user: NewUser): RestResponse<User>
+    suspend fun createUser(@Body user: NewUser): User
 }
 
-val response = service.createUser(NewUser(name = "Alice"))
+val response = service.createUser(NewUser(name = "Alice"))   // RestResponse<User>
 ```
 
 ### Custom per-request headers
@@ -60,16 +83,33 @@ val response = service.createUser(NewUser(name = "Alice"))
 Per-request headers always take priority over `defaultHeaders`:
 
 ```kotlin
+@Service
 interface UserService {
     @GET("users/{id}")
     suspend fun getUser(
         @Path("id") id: Int,
         @Header("X-Request-ID") requestId: String,
-    ): RestResponse<User>
+    ): User
 }
 
 val response = service.getUser(id = 1, requestId = UUID.randomUUID().toString())
 ```
+
+## Constructing a client
+
+The generated `<Name>Client` offers two constructors:
+
+```kotlin
+// 1. Owns its RestClient — pass a RestConfiguration directly.
+val users = UserServiceClient(RestConfiguration(baseUrl = "https://api.example.com/"))
+
+// 2. Shares an existing RestClient across several services (one token-refresh loop for all).
+val client = RestClient(RestConfiguration(baseUrl = "https://api.example.com/"))
+val users = UserServiceClient(client)
+val orders = OrderServiceClient(client)
+```
+
+> **Note:** Call `close()` when a client is no longer needed (e.g. on logout or `ViewModel.onCleared()`) to cancel the background refresh coroutine and release OkHttp resources. A client created with constructor (1) closes its `RestClient`; a client created with constructor (2) leaves the shared `RestClient` open — close that yourself.
 
 ## Error handling
 
@@ -97,14 +137,14 @@ try {
 
 ## Configuration
 
-All behaviour is controlled through `RestConfiguration`, passed once at init time.
+All behaviour is controlled through `RestConfiguration`, passed once when constructing a client.
 
 ### Default headers
 
 Headers added to every request. A header already present on an individual request takes priority.
 
 ```kotlin
-val client = RestClient(
+val service = UserServiceClient(
     RestConfiguration(
         baseUrl = "https://api.example.com/",
         defaultHeaders = mapOf(
@@ -120,7 +160,7 @@ val client = RestClient(
 Failed requests are retried automatically. The default policy retries up to 3 times with a 1-second delay. Retries trigger on network failures and 5xx server errors.
 
 ```kotlin
-val client = RestClient(
+val service = UserServiceClient(
     RestConfiguration(
         baseUrl = "https://api.example.com/",
         retryPolicy = RetryPolicy(maxAttempts = 5, delay = 2.seconds),
@@ -133,7 +173,7 @@ val client = RestClient(
 GET responses can be cached in memory with a configurable TTL. Once enabled, every GET request is eligible for caching — the second call with the same URL returns the cached response without hitting the network.
 
 ```kotlin
-val client = RestClient(
+val service = UserServiceClient(
     RestConfiguration(
         baseUrl = "https://api.example.com/",
         cachePolicy = CachePolicy(
@@ -156,7 +196,7 @@ val response = service.listUsers(page = 1, limit = 20)
 Use `tokenProvider` to supply the current token. Once configured, every request automatically receives an `Authorization: Bearer <token>` header.
 
 ```kotlin
-val client = RestClient(
+val service = UserServiceClient(
     RestConfiguration(
         baseUrl = "https://api.example.com/",
         tokenProvider = { authStore.accessToken },
@@ -169,15 +209,17 @@ val client = RestClient(
 Annotate a service method with `@SkipAuth` to opt out of token injection — useful for login or public endpoints:
 
 ```kotlin
+import io.vinicius.sak.rest.annotation.Service
 import io.vinicius.sak.rest.annotation.SkipAuth
 
+@Service
 interface AuthService {
     @SkipAuth
     @POST("auth/login")
-    suspend fun login(@Body credentials: Credentials): RestResponse<LoginResponse>
+    suspend fun login(@Body credentials: Credentials): LoginResponse
 
     @POST("auth/logout")
-    suspend fun logout(): RestResponse<Unit>   // token is injected normally
+    suspend fun logout(): Unit   // token is injected normally
 }
 ```
 
@@ -186,7 +228,7 @@ interface AuthService {
 Provide `tokenRefresher` to fetch a new token when a 401 is received. The client refreshes the token once and retries the original request automatically. Concurrent requests that all hit 401 share a single refresh call.
 
 ```kotlin
-val client = RestClient(
+val service = UserServiceClient(
     RestConfiguration(
         baseUrl = "https://api.example.com/",
         tokenProvider = { authStore.accessToken },
@@ -204,7 +246,7 @@ val client = RestClient(
 Avoid 401 errors entirely by refreshing the token before it expires. Use `preemptiveRefresh` to control how far in advance to refresh (default: 60 seconds). The client polls the token expiry in the background and refreshes automatically when it falls within the threshold.
 
 ```kotlin
-val client = RestClient(
+val service = UserServiceClient(
     RestConfiguration(
         baseUrl = "https://api.example.com/",
         tokenProvider = { authStore.accessToken },
@@ -218,14 +260,14 @@ val client = RestClient(
 )
 ```
 
-> **Note:** Call `client.close()` when the client is no longer needed (e.g. on logout or `ViewModel.onCleared()`) to cancel the background refresh coroutine and release OkHttp resources.
-
 ## Key types
 
 | Type | Role |
 |------|------|
-| `RestClient` | Main entry point — create once, reuse everywhere |
+| `@Service` | Annotation on an interface — generates a `<Name>Client` |
+| `<Name>Client` | Generated client — construct with a `RestConfiguration` or a shared `RestClient` |
 | `RestConfiguration` | All client behaviour in one place |
+| `RestClient` | Underlying engine — share one across services via the client's secondary constructor |
 | `RetryPolicy` | `maxAttempts` + `delay` |
 | `CachePolicy` | `enabled`, `ttl`, `maxEntries` |
 | `RestResponse<T>` | Decoded response body + `statusCode` + `headers` |

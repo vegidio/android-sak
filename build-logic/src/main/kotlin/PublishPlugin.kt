@@ -1,6 +1,7 @@
 import com.android.build.api.dsl.LibraryExtension
 import org.gradle.api.Plugin
 import org.gradle.api.Project
+import org.gradle.api.plugins.JavaPluginExtension
 import org.gradle.api.publish.PublishingExtension
 import org.gradle.api.publish.maven.MavenPublication
 import org.gradle.kotlin.dsl.configure
@@ -11,9 +12,19 @@ class PublishPlugin : Plugin<Project> {
         with(target) {
             pluginManager.apply("maven-publish")
 
-            extensions.configure<LibraryExtension> {
-                publishing {
-                    singleVariant("release")
+            // Android libraries must opt the release variant into publishing.
+            pluginManager.withPlugin("com.android.library") {
+                extensions.configure<LibraryExtension> {
+                    publishing {
+                        singleVariant("release")
+                    }
+                }
+            }
+
+            // Plain Kotlin/JVM modules (e.g. the KSP compiler) publish sources alongside the jar.
+            pluginManager.withPlugin("org.jetbrains.kotlin.jvm") {
+                extensions.configure<JavaPluginExtension> {
+                    withSourcesJar()
                 }
             }
 
@@ -38,11 +49,13 @@ class PublishPlugin : Plugin<Project> {
                 }
             }
 
-            // Wire the AGP "release" component after it has been created by AGP
+            // Wire the software component once it exists: AGP's "release" for Android libraries,
+            // or the "java" component for plain Kotlin/JVM modules.
             afterEvaluate {
                 extensions.configure<PublishingExtension> {
                     publications.named("release", MavenPublication::class.java) {
-                        from(components.getByName("release"))
+                        val componentName = if (components.findByName("release") != null) "release" else "java"
+                        from(components.getByName(componentName))
                     }
                 }
             }

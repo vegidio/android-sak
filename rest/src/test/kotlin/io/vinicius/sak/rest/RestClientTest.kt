@@ -4,11 +4,9 @@ import mockwebserver3.MockResponse
 import mockwebserver3.MockWebServer
 import org.junit.After
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
-import retrofit2.http.GET
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.time.Duration.Companion.seconds
 
@@ -29,19 +27,6 @@ class RestClientTest {
         .code(code)
         .apply { body?.let { body(it) } }
         .build()
-
-    interface TestApi {
-        @GET("data")
-        suspend fun getData(): String
-    }
-
-    @Test
-    fun `createService returns a non-null Retrofit proxy`() {
-        val client = RestClient(RestConfiguration(baseUrl = baseUrl()))
-        val service = client.createService<TestApi>()
-        assertNotNull(service)
-        client.close()
-    }
 
     @Test
     fun `default headers are sent with every request`() {

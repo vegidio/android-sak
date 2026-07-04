@@ -4,6 +4,7 @@ plugins {
     id("quality")
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.serialization)
+    alias(libs.plugins.ksp)
 }
 
 android {
@@ -30,4 +31,7 @@ dependencies {
     testImplementation(libs.mockk)
     testImplementation(libs.okhttp.mockwebserver)
     testImplementation(libs.kotlinx.coroutines.test)
+
+    // Generate @Service clients for the integration tests below.
+    kspTest(project(":rest-compiler"))
 }
