@@ -1,13 +1,12 @@
 package io.vinicius.sak.rest
 
-import kotlin.time.Duration.Companion.seconds
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Test
+import kotlin.time.Duration.Companion.seconds
 
 class RestConfigurationTest {
-
     @Test
     fun `RetryPolicy has correct defaults`() {
         val policy = RetryPolicy()

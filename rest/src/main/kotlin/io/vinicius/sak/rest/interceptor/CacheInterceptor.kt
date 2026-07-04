@@ -23,8 +23,9 @@ import okhttp3.ResponseBody.Companion.toResponseBody
  * This interceptor is added via [okhttp3.OkHttpClient.Builder.addInterceptor] (application layer), so it runs before
  * the network layer and can fully short-circuit it on a cache hit.
  */
-internal class CacheInterceptor(private val cache: ResponseCache) : Interceptor {
-
+internal class CacheInterceptor(
+    private val cache: ResponseCache,
+) : Interceptor {
     override fun intercept(chain: Interceptor.Chain): Response {
         val request = chain.request()
 
@@ -34,7 +35,8 @@ internal class CacheInterceptor(private val cache: ResponseCache) : Interceptor 
 
         val cached = runBlocking { cache.get(key) }
         if (cached != null) {
-            return Response.Builder()
+            return Response
+                .Builder()
                 .request(request)
                 .protocol(Protocol.HTTP_1_1)
                 .code(200)

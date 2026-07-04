@@ -1,16 +1,15 @@
 package io.vinicius.sak.rest.util
 
-import java.util.Base64
-import java.util.Date
-import kotlin.time.Duration.Companion.seconds
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.util.Base64
+import java.util.Date
+import kotlin.time.Duration.Companion.seconds
 
 class JwtUtilityTest {
-
     // Builds a fake (unsigned) JWT with the given payload JSON string
     private fun buildJwt(payloadJson: String): String {
         val header =

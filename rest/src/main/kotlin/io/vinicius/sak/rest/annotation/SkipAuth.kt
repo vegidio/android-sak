@@ -16,4 +16,6 @@ package io.vinicius.sak.rest.annotation
  * }
  * ```
  */
-@Target(AnnotationTarget.FUNCTION) @Retention(AnnotationRetention.RUNTIME) annotation class SkipAuth
+@Target(AnnotationTarget.FUNCTION)
+@Retention(AnnotationRetention.RUNTIME)
+annotation class SkipAuth

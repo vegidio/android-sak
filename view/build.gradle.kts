@@ -16,11 +16,6 @@ android {
     }
 }
 
-ktfmt {
-    kotlinLangStyle()
-    maxWidth.set(120)
-}
-
 version = "0.1.0"
 
 publishing.publications.named<MavenPublication>("release") {

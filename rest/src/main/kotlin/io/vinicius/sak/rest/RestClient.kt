@@ -6,8 +6,6 @@ import io.vinicius.sak.rest.interceptor.CacheInterceptor
 import io.vinicius.sak.rest.interceptor.HeaderInterceptor
 import io.vinicius.sak.rest.interceptor.RetryInterceptor
 import io.vinicius.sak.rest.util.JwtUtility
-import kotlin.time.Duration
-import kotlin.time.Duration.Companion.seconds
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -23,6 +21,8 @@ import okhttp3.OkHttpClient
 import okhttp3.logging.HttpLoggingInterceptor
 import retrofit2.Retrofit
 import retrofit2.converter.kotlinx.serialization.asConverterFactory
+import kotlin.time.Duration
+import kotlin.time.Duration.Companion.seconds
 
 /**
  * Main entry point for the SAK REST library. Owns the [Retrofit] and [OkHttpClient] instances and drives all
@@ -45,8 +45,9 @@ import retrofit2.converter.kotlinx.serialization.asConverterFactory
  * Call [close] when the client is no longer needed (e.g., on logout or in ViewModel.onCleared) to cancel the background
  * refresh coroutine and release OkHttp connections.
  */
-class RestClient(private val config: RestConfiguration) : AutoCloseable {
-
+class RestClient(
+    private val config: RestConfiguration,
+) : AutoCloseable {
     // Current Bearer token — updated by init, AuthAuthenticator, and the preemptive refresher.
     // @Volatile ensures cross-thread visibility without a lock for simple reads.
     @Volatile internal var currentToken: String? = null
@@ -54,21 +55,25 @@ class RestClient(private val config: RestConfiguration) : AutoCloseable {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var refreshJob: Job? = null
 
-    private val json = Json {
-        ignoreUnknownKeys = true
-        isLenient = true
-        coerceInputValues = true
-    }
+    private val json =
+        Json {
+            ignoreUnknownKeys = true
+            isLenient = true
+            coerceInputValues = true
+        }
 
     private val responseCache: ResponseCache? =
         if (config.cachePolicy.enabled) {
             ResponseCache(config.cachePolicy.ttl, config.cachePolicy.maxEntries)
-        } else null
+        } else {
+            null
+        }
 
     val okHttpClient: OkHttpClient by lazy { buildOkHttpClient() }
 
     val retrofit: Retrofit by lazy {
-        Retrofit.Builder()
+        Retrofit
+            .Builder()
             .baseUrl(config.baseUrl)
             .client(okHttpClient)
             .addConverterFactory(json.asConverterFactory("application/json; charset=UTF8".toMediaType()))
@@ -115,7 +120,8 @@ class RestClient(private val config: RestConfiguration) : AutoCloseable {
     // region Private — OkHttp construction
 
     private fun buildOkHttpClient(): OkHttpClient =
-        OkHttpClient.Builder()
+        OkHttpClient
+            .Builder()
             .apply {
                 connectTimeout(config.connectTimeout)
                 readTimeout(config.readTimeout)
@@ -132,7 +138,7 @@ class RestClient(private val config: RestConfiguration) : AutoCloseable {
                             config.tokenProvider?.let { provider ->
                                 { runBlocking { provider() }.also { token -> currentToken = token } }
                             },
-                    )
+                    ),
                 )
 
                 // 3. Retry on IOException / 5xx; explicitly skips 401
@@ -147,14 +153,13 @@ class RestClient(private val config: RestConfiguration) : AutoCloseable {
                             onTokenRefreshed = {
                                 config.tokenProvider?.invoke()?.also { token -> currentToken = token }
                             },
-                        )
+                        ),
                     )
                 }
 
                 // 5. HTTP logging — outermost layer for maximum visibility
                 addInterceptor(HttpLoggingInterceptor().apply { level = HttpLoggingInterceptor.Level.BODY })
-            }
-            .build()
+            }.build()
 
     // endregion
 

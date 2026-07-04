@@ -5,7 +5,6 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class RestErrorTest {
-
     @Test
     fun `InvalidUrl contains the url in message`() {
         val error = RestError.InvalidUrl("not-a-url")

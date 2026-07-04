@@ -13,14 +13,22 @@ import kotlinx.coroutines.flow.receiveAsFlow
 // Based on the best practice of not exposing mutable types:
 // https://developer.android.com/kotlin/coroutines/coroutines-best-practices#mutable-types
 
-sealed class PrivateStateFlow<T>(flow: StateFlow<T>) : StateFlow<T> by flow
+sealed class PrivateStateFlow<T>(
+    flow: StateFlow<T>,
+) : StateFlow<T> by flow
 
-sealed class PrivateSharedFlow<T>(flow: SharedFlow<T>) : SharedFlow<T> by flow
+sealed class PrivateSharedFlow<T>(
+    flow: SharedFlow<T>,
+) : SharedFlow<T> by flow
 
-sealed class PrivateChannel<T>(flow: Flow<T>) : Flow<T> by flow
+sealed class PrivateChannel<T>(
+    flow: Flow<T>,
+) : Flow<T> by flow
 
-private class PrivateStateFlowImpl<T>(initial: T, val wrapped: MutableStateFlow<T> = MutableStateFlow(initial)) :
-    PrivateStateFlow<T>(wrapped)
+private class PrivateStateFlowImpl<T>(
+    initial: T,
+    val wrapped: MutableStateFlow<T> = MutableStateFlow(initial),
+) : PrivateStateFlow<T>(wrapped)
 
 private class PrivateSharedFlowImpl<T>(
     replay: Int,

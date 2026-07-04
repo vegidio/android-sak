@@ -4,7 +4,6 @@ import io.mockk.every
 import io.mockk.mockk
 import io.mockk.slot
 import io.vinicius.sak.rest.annotation.SkipAuth
-import java.lang.reflect.Method
 import okhttp3.Interceptor
 import okhttp3.Protocol
 import okhttp3.Request
@@ -14,11 +13,13 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
 import retrofit2.Invocation
+import java.lang.reflect.Method
 
 class HeaderInterceptorTest {
-
-    private fun buildInterceptor(headers: Map<String, String> = emptyMap(), token: String? = null) =
-        HeaderInterceptor(defaultHeaders = headers, tokenProvider = if (token != null || true) ({ token }) else null)
+    private fun buildInterceptor(
+        headers: Map<String, String> = emptyMap(),
+        token: String? = null,
+    ) = HeaderInterceptor(defaultHeaders = headers, tokenProvider = if (token != null || true) ({ token }) else null)
 
     private fun makeChain(request: Request): Interceptor.Chain {
         val chain = mockk<Interceptor.Chain>()
@@ -26,7 +27,8 @@ class HeaderInterceptorTest {
         val responseSlot = slot<Request>()
         every { chain.proceed(capture(responseSlot)) } answers
             {
-                Response.Builder()
+                Response
+                    .Builder()
                     .request(responseSlot.captured)
                     .protocol(Protocol.HTTP_1_1)
                     .code(200)
@@ -44,7 +46,11 @@ class HeaderInterceptorTest {
         every { method.isAnnotationPresent(SkipAuth::class.java) } returns true
         val invocation = mockk<Invocation>()
         every { invocation.method() } returns method
-        return Request.Builder().url(url).tag(Invocation::class.java, invocation).build()
+        return Request
+            .Builder()
+            .url(url)
+            .tag(Invocation::class.java, invocation)
+            .build()
     }
 
     @Test

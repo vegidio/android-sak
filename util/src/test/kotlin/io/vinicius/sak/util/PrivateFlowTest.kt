@@ -38,17 +38,13 @@ class PrivateFlowTest {
             events.emit(value)
         }
 
-        fun trySendEvent(value: String): Boolean {
-            return events.tryEmit(value)
-        }
+        fun trySendEvent(value: String): Boolean = events.tryEmit(value)
 
         suspend fun sendBufferedEvent(value: String) {
             bufferedEvents.emit(value)
         }
 
-        fun trySendBufferedEvent(value: String): Boolean {
-            return bufferedEvents.tryEmit(value)
-        }
+        fun trySendBufferedEvent(value: String): Boolean = bufferedEvents.tryEmit(value)
 
         val effects = privateChannel<String>()
 
@@ -102,33 +98,35 @@ class PrivateFlowTest {
     }
 
     @Test
-    fun `state flow collectors receive updates`() = runTest {
-        val vm = FakeViewModel()
-        vm.counter.test {
-            assertEquals(0, awaitItem()) // initial value
-            vm.incrementCounter()
-            assertEquals(1, awaitItem())
-            vm.incrementCounter()
-            assertEquals(2, awaitItem())
-            vm.incrementCounter()
-            assertEquals(3, awaitItem())
-            cancelAndIgnoreRemainingEvents()
+    fun `state flow collectors receive updates`() =
+        runTest {
+            val vm = FakeViewModel()
+            vm.counter.test {
+                assertEquals(0, awaitItem()) // initial value
+                vm.incrementCounter()
+                assertEquals(1, awaitItem())
+                vm.incrementCounter()
+                assertEquals(2, awaitItem())
+                vm.incrementCounter()
+                assertEquals(3, awaitItem())
+                cancelAndIgnoreRemainingEvents()
+            }
         }
-    }
 
     @Test
-    fun `state flow only emits distinct values`() = runTest {
-        val vm = FakeViewModel()
-        vm.name.test {
-            assertEquals("initial", awaitItem())
-            vm.setName("a")
-            assertEquals("a", awaitItem())
-            vm.setName("a") // duplicate, should be conflated
-            vm.setName("b")
-            assertEquals("b", awaitItem())
-            cancelAndIgnoreRemainingEvents()
+    fun `state flow only emits distinct values`() =
+        runTest {
+            val vm = FakeViewModel()
+            vm.name.test {
+                assertEquals("initial", awaitItem())
+                vm.setName("a")
+                assertEquals("a", awaitItem())
+                vm.setName("a") // duplicate, should be conflated
+                vm.setName("b")
+                assertEquals("b", awaitItem())
+                cancelAndIgnoreRemainingEvents()
+            }
         }
-    }
 
     @Test
     fun `multiple state flows are independent`() {
@@ -157,16 +155,17 @@ class PrivateFlowTest {
     }
 
     @Test
-    fun `shared flow emit delivers value to collector`() = runTest {
-        val vm = FakeViewModel()
-        vm.events.test {
-            vm.sendEvent("hello")
-            assertEquals("hello", awaitItem())
-            vm.sendEvent("world")
-            assertEquals("world", awaitItem())
-            cancelAndIgnoreRemainingEvents()
+    fun `shared flow emit delivers value to collector`() =
+        runTest {
+            val vm = FakeViewModel()
+            vm.events.test {
+                vm.sendEvent("hello")
+                assertEquals("hello", awaitItem())
+                vm.sendEvent("world")
+                assertEquals("world", awaitItem())
+                cancelAndIgnoreRemainingEvents()
+            }
         }
-    }
 
     @Test
     fun `shared flow tryEmit returns true when buffer available`() {
@@ -177,52 +176,56 @@ class PrivateFlowTest {
     }
 
     @Test
-    fun `shared flow replay delivers last value to new collector`() = runTest {
-        val vm = FakeViewModel()
+    fun `shared flow replay delivers last value to new collector`() =
+        runTest {
+            val vm = FakeViewModel()
 
-        // Emit before any collector subscribes
-        vm.sendEvent("replayed")
+            // Emit before any collector subscribes
+            vm.sendEvent("replayed")
 
-        // New collector should get the replayed value
-        vm.events.test {
-            assertEquals("replayed", awaitItem())
-            cancelAndIgnoreRemainingEvents()
+            // New collector should get the replayed value
+            vm.events.test {
+                assertEquals("replayed", awaitItem())
+                cancelAndIgnoreRemainingEvents()
+            }
         }
-    }
 
     @Test
-    fun `shared flow with DROP_OLDEST does not suspend`() = runTest {
-        val vm = FakeViewModel()
-        // bufferedEvents has extraBufferCapacity=1, onBufferOverflow=DROP_OLDEST
-        val result = vm.trySendBufferedEvent("event1")
-        assertTrue(result)
-    }
+    fun `shared flow with DROP_OLDEST does not suspend`() =
+        runTest {
+            val vm = FakeViewModel()
+            // bufferedEvents has extraBufferCapacity=1, onBufferOverflow=DROP_OLDEST
+            val result = vm.trySendBufferedEvent("event1")
+            assertTrue(result)
+        }
 
     @Test
-    fun `shared flow with no replay does not emit to late collectors`() = runTest {
-        val vm = FakeViewModel()
+    fun `shared flow with no replay does not emit to late collectors`() =
+        runTest {
+            val vm = FakeViewModel()
 
-        // bufferedEvents has replay=0
-        vm.sendBufferedEvent("missed")
+            // bufferedEvents has replay=0
+            vm.sendBufferedEvent("missed")
 
-        vm.bufferedEvents.test {
-            // "missed" was emitted before collector, with replay=0 it should not be received
-            expectNoEvents()
-            cancelAndIgnoreRemainingEvents()
+            vm.bufferedEvents.test {
+                // "missed" was emitted before collector, with replay=0 it should not be received
+                expectNoEvents()
+                cancelAndIgnoreRemainingEvents()
+            }
         }
-    }
 
     @Test
-    fun `shared flow does not conflate duplicate values`() = runTest {
-        val vm = FakeViewModel()
-        vm.events.test {
-            vm.sendEvent("same")
-            assertEquals("same", awaitItem())
-            vm.sendEvent("same")
-            assertEquals("same", awaitItem())
-            cancelAndIgnoreRemainingEvents()
+    fun `shared flow does not conflate duplicate values`() =
+        runTest {
+            val vm = FakeViewModel()
+            vm.events.test {
+                vm.sendEvent("same")
+                assertEquals("same", awaitItem())
+                vm.sendEvent("same")
+                assertEquals("same", awaitItem())
+                cancelAndIgnoreRemainingEvents()
+            }
         }
-    }
 
     // endregion
 
@@ -241,26 +244,28 @@ class PrivateFlowTest {
     }
 
     @Test
-    fun `channel send delivers value to collector`() = runTest {
-        val vm = FakeViewModel()
-        vm.effects.test {
-            vm.sendEffect("hello")
-            assertEquals("hello", awaitItem())
-            vm.sendEffect("world")
-            assertEquals("world", awaitItem())
-            cancelAndIgnoreRemainingEvents()
+    fun `channel send delivers value to collector`() =
+        runTest {
+            val vm = FakeViewModel()
+            vm.effects.test {
+                vm.sendEffect("hello")
+                assertEquals("hello", awaitItem())
+                vm.sendEffect("world")
+                assertEquals("world", awaitItem())
+                cancelAndIgnoreRemainingEvents()
+            }
         }
-    }
 
     @Test
-    fun `channel trySend delivers value to collector`() = runTest {
-        val vm = FakeViewModel()
-        vm.effects.test {
-            vm.trySendEffect("test")
-            assertEquals("test", awaitItem())
-            cancelAndIgnoreRemainingEvents()
+    fun `channel trySend delivers value to collector`() =
+        runTest {
+            val vm = FakeViewModel()
+            vm.effects.test {
+                vm.trySendEffect("test")
+                assertEquals("test", awaitItem())
+                cancelAndIgnoreRemainingEvents()
+            }
         }
-    }
 
     @Test
     fun `privateChannel exposes read-only Flow interface`() {

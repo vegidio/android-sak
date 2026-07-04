@@ -1,11 +1,11 @@
 package io.vinicius.sak.rest.interceptor
 
 import io.vinicius.sak.rest.RetryPolicy
-import java.io.IOException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import okhttp3.Interceptor
 import okhttp3.Response
+import java.io.IOException
 
 /**
  * OkHttp application interceptor that retries failed requests according to [policy].
@@ -23,8 +23,9 @@ import okhttp3.Response
  * between retries is applied via [kotlinx.coroutines.delay] inside [runBlocking], which is safe here because OkHttp
  * interceptors run on OkHttp's own thread pool, never on the Android main thread.
  */
-internal class RetryInterceptor(private val policy: RetryPolicy) : Interceptor {
-
+internal class RetryInterceptor(
+    private val policy: RetryPolicy,
+) : Interceptor {
     override fun intercept(chain: Interceptor.Chain): Response {
         val request = chain.request()
         var response: Response? = null
@@ -37,10 +38,14 @@ internal class RetryInterceptor(private val policy: RetryPolicy) : Interceptor {
 
                 val code = response.code
                 when {
-                    code == 401 -> return response // AuthAuthenticator handles this
-                    code in 400..499 -> return response // client error, no retry
+                    code == 401 -> return response
+
+                    // AuthAuthenticator handles this
+                    code in 400..499 -> return response
+
+                    // client error, no retry
                     code in 200..399 -> return response // success or redirect
-                // 5xx: fall through to retry
+                    // 5xx: fall through to retry
                 }
             } catch (e: IOException) {
                 lastException = e

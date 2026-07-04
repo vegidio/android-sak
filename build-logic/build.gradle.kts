@@ -20,7 +20,8 @@ gradlePlugin {
 }
 
 dependencies {
-    compileOnly("com.android.tools.build:gradle:8.9.2")
-    compileOnly("org.jetbrains.kotlin:kotlin-gradle-plugin:2.2.10")
-    compileOnly("io.gitlab.arturbosch.detekt:detekt-gradle-plugin:1.23.8")
+    compileOnly("com.android.tools.build:gradle:8.13.2")
+    compileOnly("org.jetbrains.kotlin:kotlin-gradle-plugin:2.3.20")
+    compileOnly("dev.detekt:dev.detekt.gradle.plugin:2.0.0-alpha.5")
+    compileOnly("org.jlleitschuh.gradle:ktlint-gradle:14.2.0")
 }

@@ -34,10 +34,12 @@ internal class AuthAuthenticator(
     private val tokenRefresher: suspend () -> Boolean,
     private val onTokenRefreshed: suspend () -> String?,
 ) : Authenticator {
-
     private val mutex = Mutex()
 
-    override fun authenticate(route: Route?, response: Response): Request? {
+    override fun authenticate(
+        route: Route?,
+        response: Response,
+    ): Request? {
         // Skip @SkipAuth endpoints
         if (response.request.hasSkipAuth()) return null
 
@@ -47,23 +49,29 @@ internal class AuthAuthenticator(
         // Prevent infinite loops: if we've already retried once and still got 401, give up
         if (response.responseCount() >= 2) return null
 
-        val newToken: String? = runBlocking {
-            mutex.withLock {
-                val tokenBeforeLock = tokenProvider()
-                val tokenUsedInRequest = response.request.header("Authorization")?.removePrefix("Bearer ")
+        val newToken: String? =
+            runBlocking {
+                mutex.withLock {
+                    val tokenBeforeLock = tokenProvider()
+                    val tokenUsedInRequest = response.request.header("Authorization")?.removePrefix("Bearer ")
 
-                // Another coroutine already refreshed while we waited for the mutex
-                if (tokenBeforeLock != null && tokenBeforeLock != tokenUsedInRequest) {
-                    return@withLock tokenBeforeLock
+                    // Another coroutine already refreshed while we waited for the mutex
+                    if (tokenBeforeLock != null && tokenBeforeLock != tokenUsedInRequest) {
+                        return@withLock tokenBeforeLock
+                    }
+
+                    // We are first: perform the refresh
+                    val success = tokenRefresher()
+                    if (success) onTokenRefreshed() else null
                 }
-
-                // We are first: perform the refresh
-                val success = tokenRefresher()
-                if (success) onTokenRefreshed() else null
             }
-        }
 
-        return newToken?.let { token -> response.request.newBuilder().header("Authorization", "Bearer $token").build() }
+        return newToken?.let { token ->
+            response.request
+                .newBuilder()
+                .header("Authorization", "Bearer $token")
+                .build()
+        }
     }
 
     /** Counts how many times the response chain has been retried (via prior responses). */

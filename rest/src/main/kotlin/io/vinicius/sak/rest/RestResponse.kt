@@ -10,7 +10,11 @@ package io.vinicius.sak.rest
  * @param statusCode HTTP status code (e.g. 200, 201).
  * @param headers Response headers as a map of name to value.
  */
-data class RestResponse<T>(val body: T, val statusCode: Int, val headers: Map<String, String>) {
+data class RestResponse<T>(
+    val body: T,
+    val statusCode: Int,
+    val headers: Map<String, String>,
+) {
     companion object {
         /** Converts a [retrofit2.Response] into a [RestResponse]. */
         fun <T : Any> from(response: retrofit2.Response<T>): RestResponse<T> {

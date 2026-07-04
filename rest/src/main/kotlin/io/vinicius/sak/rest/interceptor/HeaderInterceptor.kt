@@ -23,7 +23,6 @@ internal class HeaderInterceptor(
     private val defaultHeaders: Map<String, String>,
     private val tokenProvider: (() -> String?)?,
 ) : Interceptor {
-
     override fun intercept(chain: Interceptor.Chain): Response {
         val original = chain.request()
         val builder = original.newBuilder()

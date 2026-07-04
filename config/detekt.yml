@@ -1,19 +1,16 @@
-build:
-  maxIssues: 0
-
 config:
   validation: true
   warningsAsErrors: false
 
 complexity:
   LongMethod:
-    threshold: 60
+    allowedLines: 60
   LongParameterList:
-    functionThreshold: 8
-    constructorThreshold: 8
+    allowedFunctionParameters: 8
+    allowedConstructorParameters: 8
   TooManyFunctions:
-    thresholdInFiles: 20
-    thresholdInClasses: 15
+    allowedFunctionsPerFile: 20
+    allowedFunctionsPerClass: 15
 
 naming:
   FunctionNaming:
@@ -33,4 +30,3 @@ style:
     excludeCommentStatements: true
   ReturnCount:
     max: 4
-

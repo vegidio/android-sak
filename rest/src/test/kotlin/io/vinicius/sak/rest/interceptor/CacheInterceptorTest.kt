@@ -1,8 +1,6 @@
 package io.vinicius.sak.rest.interceptor
 
 import io.vinicius.sak.rest.cache.ResponseCache
-import kotlin.time.Duration.Companion.milliseconds
-import kotlin.time.Duration.Companion.seconds
 import mockwebserver3.MockResponse
 import mockwebserver3.MockWebServer
 import okhttp3.OkHttpClient
@@ -13,9 +11,10 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Before
 import org.junit.Test
+import kotlin.time.Duration.Companion.milliseconds
+import kotlin.time.Duration.Companion.seconds
 
 class CacheInterceptorTest {
-
     private val server = MockWebServer()
 
     @Before fun setUp() = server.start()
@@ -28,10 +27,20 @@ class CacheInterceptorTest {
     private fun get(path: String = "/data"): Request = Request.Builder().url(server.url(path)).build()
 
     private fun post(path: String = "/data"): Request =
-        Request.Builder().url(server.url(path)).post("{}".toRequestBody()).build()
+        Request
+            .Builder()
+            .url(server.url(path))
+            .post("{}".toRequestBody())
+            .build()
 
-    private fun response(code: Int, body: String? = null) =
-        MockResponse.Builder().code(code).apply { body?.let { body(it) } }.build()
+    private fun response(
+        code: Int,
+        body: String? = null,
+    ) = MockResponse
+        .Builder()
+        .code(code)
+        .apply { body?.let { body(it) } }
+        .build()
 
     @Test
     fun `first GET is a cache MISS and hits the network`() {
