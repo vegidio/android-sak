@@ -13,6 +13,9 @@ class QualityPlugin : Plugin<Project> {
             // ktlint is used for formatting only (./gradlew ktlintFormat); linting stays with detekt.
             pluginManager.apply("org.jlleitschuh.gradle.ktlint")
 
+            // Kover: code coverage. Auto-creates per-variant + total reports; aggregation is wired at root.
+            pluginManager.apply("org.jetbrains.kotlinx.kover")
+
             extensions.configure<DetektExtension> {
                 config.setFrom(rootProject.files("config/detekt.yml"))
                 buildUponDefaultConfig.set(true)

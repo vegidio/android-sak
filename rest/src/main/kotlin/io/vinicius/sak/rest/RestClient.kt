@@ -61,6 +61,7 @@ import kotlin.time.Duration.Companion.seconds
  * @param connectTimeout OkHttp connect timeout.
  * @param readTimeout OkHttp read/write timeout.
  */
+@Suppress("LongParameterList")
 class RestClient(
     private val baseUrl: String,
     private val defaultHeaders: Map<String, String> = emptyMap(),

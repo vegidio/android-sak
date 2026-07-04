@@ -6,4 +6,10 @@ plugins {
     alias(libs.plugins.ksp) apply false
     alias(libs.plugins.detekt) apply false
     alias(libs.plugins.ktlint) apply false
+    alias(libs.plugins.kover) // applied to root for aggregation
+}
+
+dependencies {
+    kover(project(":rest"))
+    kover(project(":rest-compiler"))
 }
