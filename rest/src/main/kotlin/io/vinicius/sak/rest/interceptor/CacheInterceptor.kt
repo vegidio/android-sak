@@ -39,7 +39,7 @@ internal class CacheInterceptor(
                 .Builder()
                 .request(request)
                 .protocol(Protocol.HTTP_1_1)
-                .code(HTTP_OK)
+                .code(HttpStatus.OK)
                 .message("OK (cached)")
                 .addHeader("X-Cache", "HIT")
                 .body(cached.toResponseBody("application/json".toMediaType()))
@@ -54,9 +54,5 @@ internal class CacheInterceptor(
         }
 
         return response
-    }
-
-    private companion object {
-        private const val HTTP_OK = 200
     }
 }

@@ -38,13 +38,14 @@ internal class RetryInterceptor(
 
                 val code = response.code
                 when {
-                    code == HTTP_UNAUTHORIZED -> return response
-
-                    // AuthAuthenticator handles this
-                    code in CLIENT_ERROR_RANGE -> return response
+                    // AuthAuthenticator handles 401
+                    code == HttpStatus.UNAUTHORIZED -> return response
 
                     // client error, no retry
-                    code in SUCCESS_REDIRECT_RANGE -> return response // success or redirect
+                    code in HttpStatus.CLIENT_ERROR_RANGE -> return response
+
+                    // success or redirect
+                    code in HttpStatus.SUCCESS_REDIRECT_RANGE -> return response
                     // 5xx: fall through to retry
                 }
             } catch (e: IOException) {
@@ -59,11 +60,5 @@ internal class RetryInterceptor(
         }
 
         return response ?: throw lastException ?: IOException("Request failed after ${policy.maxAttempts} attempt(s)")
-    }
-
-    private companion object {
-        private const val HTTP_UNAUTHORIZED = 401
-        private val CLIENT_ERROR_RANGE = 400..499
-        private val SUCCESS_REDIRECT_RANGE = 200..399
     }
 }

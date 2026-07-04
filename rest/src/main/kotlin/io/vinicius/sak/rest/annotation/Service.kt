@@ -21,5 +21,5 @@ package io.vinicius.sak.rest.annotation
  * ```
  */
 @Target(AnnotationTarget.CLASS)
-@Retention(AnnotationRetention.BINARY)
+@Retention(AnnotationRetention.SOURCE)
 annotation class Service

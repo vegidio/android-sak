@@ -85,10 +85,9 @@ class RestServiceProcessor(
                 .resolve()
                 .toTypeName(funcResolver)
                 .copy(nullable = false)
-            val funcName = function.simpleName.asString()
 
             retrofitInterface.addFunction(buildRetrofitFunction(function, funcResolver, bodyType))
-            clientMethods += buildClientMethod(function, funcName, funcResolver, bodyType)
+            clientMethods += buildClientMethod(function, funcResolver, bodyType)
         }
 
         val retrofitFile = FileSpec
@@ -134,21 +133,23 @@ class RestServiceProcessor(
     /** Public facade method: same signature (minus Retrofit annotations), returns `RestResponse<T>`. */
     private fun buildClientMethod(
         function: KSFunctionDeclaration,
-        funcName: String,
         funcResolver: TypeParameterResolver,
         bodyType: TypeName,
     ): FunSpec {
+        val funcName = function.simpleName.asString()
         val builder = FunSpec
             .builder(funcName)
             .addModifiers(KModifier.SUSPEND)
             .returns(REST_RESPONSE.parameterizedBy(bodyType))
 
-        function.parameters.forEach { param ->
-            builder.addParameter(param.name!!.asString(), param.type.toTypeName(funcResolver))
+        val paramNames = function.parameters.map { it.name!!.asString() }
+        paramNames.forEachIndexed { index, name ->
+            builder.addParameter(name, function.parameters[index].type.toTypeName(funcResolver))
         }
 
-        val callArgs = function.parameters.joinToString(", ") { it.name!!.asString() }
-        builder.addStatement("return %T.from(service.$funcName($callArgs))", REST_RESPONSE)
+        val callArgs = paramNames.joinToString(", ") { "%N" }
+        val statementArgs = listOf(REST_RESPONSE, funcName, *paramNames.toTypedArray()).toTypedArray()
+        builder.addStatement("return %T.from(service.%N($callArgs))", *statementArgs)
 
         return builder.build()
     }
@@ -216,7 +217,8 @@ class RestServiceProcessor(
             builder.addParameter(spec.build())
         }
 
-        val forwarded = CONFIG_PARAMS.joinToString(", ") { it.name }
+        // Forward by name (not position) so a reorder of RestClient's constructor fails loudly.
+        val forwarded = CONFIG_PARAMS.joinToString(", ") { "${it.name} = ${it.name}" }
         builder.callThisConstructor(
             CodeBlock.of("%T($forwarded)", REST_CLIENT),
             CodeBlock.of("true"),
