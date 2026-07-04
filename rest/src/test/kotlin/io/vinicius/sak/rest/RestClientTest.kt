@@ -117,27 +117,4 @@ class RestClientTest {
         assertEquals("Bearer refreshed-token", server.takeRequest().headers["Authorization"])
         client.close()
     }
-
-    @Test
-    fun `end-to-end cached response served on second GET`() {
-        server.enqueue(response(200, """{"id":1}"""))
-
-        val client =
-            RestClient(baseUrl = baseUrl(), cachePolicy = CachePolicy(enabled = true, ttl = 60.seconds))
-
-        val request =
-            okhttp3.Request
-                .Builder()
-                .url(server.url("/data"))
-                .build()
-        client.okHttpClient
-            .newCall(request)
-            .execute()
-            .close()
-        val second = client.okHttpClient.newCall(request).execute()
-
-        assertEquals("HIT", second.header("X-Cache"))
-        assertEquals(1, server.requestCount)
-        client.close()
-    }
 }

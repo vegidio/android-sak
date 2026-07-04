@@ -78,10 +78,12 @@ internal class AuthAuthenticator(
     private fun Response.responseCount(): Int {
         var count = 1
         var prior = priorResponse
+
         while (prior != null) {
             count++
             prior = prior.priorResponse
         }
+
         return count
     }
 }

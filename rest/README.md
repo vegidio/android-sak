@@ -137,7 +137,7 @@ try {
 
 ## Configuration
 
-All behaviour is controlled through the client's constructor arguments, passed once when constructing a client.
+Connection-level behaviour (headers, timeouts, auth) is controlled through the client's constructor arguments; per-endpoint caching and retry are controlled with annotations on the service interface (see below).
 
 ### Default headers
 
@@ -155,32 +155,40 @@ val service = UserServiceClient(
 
 ### Retry
 
-Failed requests are retried automatically. The default policy retries up to 3 times with a 1-second delay. Retries trigger on network failures and 5xx server errors.
+Retry is opt-in per endpoint via `@Retry`. Annotate the service interface to set a default for every idempotent method, or a single method to override it; `@NoRetry` disables retries for a method that would otherwise inherit the service default. Retries trigger on network failures and 5xx server errors. `delay` is in seconds; a request with no `@Retry` is attempted exactly once.
+
+Only idempotent verbs (GET, PUT, DELETE) may be retried — putting `@Retry`/`@NoRetry` on a `@POST`/`@PATCH` method is a compile-time error.
 
 ```kotlin
-val service = UserServiceClient(
-    baseUrl = "https://api.example.com/",
-    retryPolicy = RetryPolicy(maxAttempts = 5, delay = 2.seconds),
-)
+@Service
+@Retry(maxAttempts = 3, delay = 1) // default for all idempotent methods
+interface UserService {
+    @GET("users/{id}")
+    @Retry(maxAttempts = 5, delay = 2) // override for this endpoint
+    suspend fun getUser(@Path("id") id: Int): User
+
+    @GET("health")
+    @NoRetry // never retried
+    suspend fun health(): Status
+}
 ```
 
 ### Caching
 
-GET responses can be cached in memory with a configurable TTL. Once enabled, every GET request is eligible for caching — the second call with the same URL returns the cached response without hitting the network.
+GET responses can be cached in memory via `@Cacheable`. Annotate the service interface to cache every GET method by default, or a single method to override it; `@NoCache` disables caching for a method that would otherwise inherit the service default. The second call with the same URL returns the cached response without hitting the network. `ttl` is in seconds and defaults to never expiring; `maxEntries` defaults to unlimited (and sizes the shared cache, so it is honored only at service level).
 
 ```kotlin
-val service = UserServiceClient(
-    baseUrl = "https://api.example.com/",
-    cachePolicy = CachePolicy(
-        enabled = true,
-        ttl = 60.seconds,   // cache entries expire after 60 seconds
-        maxEntries = 100,   // evict oldest entry when limit is reached
-    ),
-)
+@Service
+@Cacheable(ttl = 60, maxEntries = 100) // maxEntries sizes the shared cache (service-level only)
+interface UserService {
+    @GET("users/{id}")
+    @Cacheable(ttl = 300) // override: cache this endpoint for 5 minutes
+    suspend fun getUser(@Path("id") id: Int): User
 
-// First call hits the network and stores the response.
-// Subsequent calls within the TTL return the cached response.
-val response = service.listUsers(page = 1, limit = 20)
+    @GET("health")
+    @NoCache // always hit the network
+    suspend fun health(): Status
+}
 ```
 
 ## Authentication
@@ -255,8 +263,8 @@ val service = UserServiceClient(
 | `@Service` | Annotation on an interface — generates a `<Name>Client` |
 | `<Name>Client` | Generated client — construct with `baseUrl` + options, or a shared `RestClient` |
 | `RestClient` | Underlying engine — construct with `baseUrl` + options; share one across services via the client's secondary constructor |
-| `RetryPolicy` | `maxAttempts` + `delay` |
-| `CachePolicy` | `enabled`, `ttl`, `maxEntries` |
+| `@Cacheable` / `@NoCache` | Per-endpoint (or service-level) in-memory caching: `ttl` (seconds), `maxEntries` |
+| `@Retry` / `@NoRetry` | Per-endpoint (or service-level) retry: `maxAttempts`, `delay` (seconds); idempotent verbs only |
 | `RestResponse<T>` | Decoded response body + `statusCode` + `headers` |
 | `RestError` | Sealed error hierarchy thrown on failure |
 | `@SkipAuth` | Annotation to skip auth injection on a single endpoint |

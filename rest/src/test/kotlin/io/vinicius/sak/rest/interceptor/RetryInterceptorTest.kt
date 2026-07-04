@@ -1,6 +1,7 @@
 package io.vinicius.sak.rest.interceptor
 
-import io.vinicius.sak.rest.RetryPolicy
+import io.vinicius.sak.rest.annotation.NoRetry
+import io.vinicius.sak.rest.annotation.Retry
 import mockwebserver3.MockResponse
 import mockwebserver3.MockWebServer
 import okhttp3.OkHttpClient
@@ -10,8 +11,8 @@ import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
+import retrofit2.Invocation
 import java.io.IOException
-import kotlin.time.Duration
 
 class RetryInterceptorTest {
     private val server = MockWebServer()
@@ -20,10 +21,37 @@ class RetryInterceptorTest {
 
     @AfterEach fun tearDown() = server.close()
 
-    private fun clientWith(policy: RetryPolicy): OkHttpClient =
-        OkHttpClient.Builder().addInterceptor(RetryInterceptor(policy)).build()
+    private val client: OkHttpClient = OkHttpClient.Builder().addInterceptor(RetryInterceptor()).build()
 
-    private fun get(): Request = Request.Builder().url(server.url("/test")).build()
+    /**
+     * Endpoints whose annotations the interceptor reads via the [Invocation] tag. Retrofit attaches this tag
+     * automatically at runtime; here we build it by hand so the interceptor can be unit-tested in isolation.
+     * `delay = 0` keeps the tests fast.
+     */
+    private interface Endpoints {
+        @Retry(maxAttempts = 3, delay = 0)
+        fun retry3()
+
+        @Retry(maxAttempts = 1, delay = 0)
+        fun retry1()
+
+        @NoRetry
+        fun noRetry()
+
+        fun plain()
+    }
+
+    private fun request(
+        methodName: String,
+        url: String = server.url("/test").toString(),
+    ): Request {
+        val invocation = Invocation.of(Endpoints::class.java.getMethod(methodName), emptyList<Any>())
+        return Request
+            .Builder()
+            .url(url)
+            .tag(Invocation::class.java, invocation)
+            .build()
+    }
 
     private fun response(
         code: Int,
@@ -35,9 +63,25 @@ class RetryInterceptorTest {
         .build()
 
     @Test
+    fun `request without @Retry is attempted once`() {
+        server.enqueue(response(500))
+        val response = client.newCall(request("plain")).execute()
+        assertEquals(500, response.code)
+        assertEquals(1, server.requestCount)
+    }
+
+    @Test
+    fun `@NoRetry is attempted once`() {
+        server.enqueue(response(500))
+        val response = client.newCall(request("noRetry")).execute()
+        assertEquals(500, response.code)
+        assertEquals(1, server.requestCount)
+    }
+
+    @Test
     fun `200 response is returned without retry`() {
         server.enqueue(response(200, "ok"))
-        val response = clientWith(RetryPolicy(maxAttempts = 3, delay = Duration.ZERO)).newCall(get()).execute()
+        val response = client.newCall(request("retry3")).execute()
         assertEquals(200, response.code)
         assertEquals(1, server.requestCount)
     }
@@ -45,7 +89,7 @@ class RetryInterceptorTest {
     @Test
     fun `401 is returned immediately without retry`() {
         server.enqueue(response(401))
-        val response = clientWith(RetryPolicy(maxAttempts = 3, delay = Duration.ZERO)).newCall(get()).execute()
+        val response = client.newCall(request("retry3")).execute()
         assertEquals(401, response.code)
         assertEquals(1, server.requestCount)
     }
@@ -53,7 +97,7 @@ class RetryInterceptorTest {
     @Test
     fun `404 is returned immediately without retry`() {
         server.enqueue(response(404))
-        val response = clientWith(RetryPolicy(maxAttempts = 3, delay = Duration.ZERO)).newCall(get()).execute()
+        val response = client.newCall(request("retry3")).execute()
         assertEquals(404, response.code)
         assertEquals(1, server.requestCount)
     }
@@ -61,7 +105,7 @@ class RetryInterceptorTest {
     @Test
     fun `500 is retried up to maxAttempts`() {
         repeat(3) { server.enqueue(response(500)) }
-        val response = clientWith(RetryPolicy(maxAttempts = 3, delay = Duration.ZERO)).newCall(get()).execute()
+        val response = client.newCall(request("retry3")).execute()
         assertEquals(500, response.code)
         assertEquals(3, server.requestCount)
     }
@@ -71,7 +115,7 @@ class RetryInterceptorTest {
         server.enqueue(response(500))
         server.enqueue(response(500))
         server.enqueue(response(200, "recovered"))
-        val response = clientWith(RetryPolicy(maxAttempts = 3, delay = Duration.ZERO)).newCall(get()).execute()
+        val response = client.newCall(request("retry3")).execute()
         assertEquals(200, response.code)
         assertEquals(3, server.requestCount)
     }
@@ -79,7 +123,7 @@ class RetryInterceptorTest {
     @Test
     fun `maxAttempts of 1 means no retry on 500`() {
         server.enqueue(response(500))
-        val response = clientWith(RetryPolicy(maxAttempts = 1, delay = Duration.ZERO)).newCall(get()).execute()
+        val response = client.newCall(request("retry1")).execute()
         assertEquals(500, response.code)
         assertEquals(1, server.requestCount)
     }
@@ -87,13 +131,8 @@ class RetryInterceptorTest {
     @Test
     fun `IOException is retried and rethrown after maxAttempts`() {
         server.close()
-        val client =
-            OkHttpClient
-                .Builder()
-                .addInterceptor(RetryInterceptor(RetryPolicy(maxAttempts = 2, delay = Duration.ZERO)))
-                .build()
         assertThrows<IOException> {
-            client.newCall(Request.Builder().url("http://localhost:1").build()).execute()
+            client.newCall(request("retry3", url = "http://localhost:1")).execute()
         }
     }
 }

@@ -11,11 +11,12 @@ import kotlin.time.Duration
  * lazily on read (expired entry is removed and null is returned). When [maxEntries] is exceeded, the oldest
  * insertion-order entry is dropped (LRU-style), using a [LinkedHashMap] which preserves insertion order.
  *
- * @param ttl Time-to-live for each cached entry.
- * @param maxEntries Maximum number of entries before oldest-first eviction.
+ * The TTL is supplied per entry at [put] time (from each endpoint's `@Cacheable(ttl)` annotation), so a single shared
+ * cache can hold entries with different lifetimes. [kotlin.time.Duration.INFINITE] stores an entry that never expires.
+ *
+ * @param maxEntries Maximum number of entries before oldest-first eviction. A non-positive value means unlimited.
  */
 internal class ResponseCache(
-    private val ttl: Duration,
     private val maxEntries: Int,
 ) {
     private data class Entry(
@@ -30,28 +31,35 @@ internal class ResponseCache(
     suspend fun get(key: String): String? =
         mutex.withLock {
             val entry = store[key] ?: return@withLock null
+
             if (System.currentTimeMillis() > entry.expiresAt) {
                 store.remove(key)
                 return@withLock null
             }
+
             entry.body
         }
 
     /**
-     * Stores [body] under [key] with the configured TTL. If [maxEntries] is reached, the oldest entry is evicted first.
+     * Stores [body] under [key] with the given [ttl]. If [maxEntries] is reached, the oldest entry is evicted first.
      */
     suspend fun put(
         key: String,
         body: String,
+        ttl: Duration,
     ): Unit =
         mutex.withLock {
-            if (store.size >= maxEntries) {
+            if (maxEntries > 0 && store.size >= maxEntries) {
                 store.iterator().also {
                     it.next()
                     it.remove()
                 }
             }
-            store[key] = Entry(body, System.currentTimeMillis() + ttl.inWholeMilliseconds)
+
+            val expiresAt =
+                if (ttl == Duration.INFINITE) Long.MAX_VALUE else System.currentTimeMillis() + ttl.inWholeMilliseconds
+
+            store[key] = Entry(body, expiresAt)
         }
 
     /** Removes all entries from the cache. */

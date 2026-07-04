@@ -48,10 +48,15 @@ import kotlin.time.Duration.Companion.seconds
  * Call [close] when the client is no longer needed (e.g., on logout or in ViewModel.onCleared) to cancel the background
  * refresh coroutine and release OkHttp connections.
  *
+ * Caching and retry are configured per endpoint with the `@Cacheable`/`@NoCache` and `@Retry`/`@NoRetry` annotations on
+ * the service interface — not on this client. See [io.vinicius.sak.rest.annotation.Cacheable] and
+ * [io.vinicius.sak.rest.annotation.Retry].
+ *
  * @param baseUrl The base URL for all requests. Must end with '/'.
  * @param defaultHeaders Headers added to every outgoing request.
- * @param retryPolicy Retry behaviour on network failure or server error.
- * @param cachePolicy In-memory response cache behaviour.
+ * @param cacheMaxEntries Maximum number of entries the shared in-memory response cache holds before oldest-first
+ *   eviction; -1 (the default) means unlimited. The generated client supplies this from the service-level
+ *   `@Cacheable(maxEntries)`.
  * @param tokenProvider Suspend lambda returning the current Bearer token, or null if unauthenticated. Called once at
  *   startup and after each refresh to update the cached token.
  * @param tokenRefresher Suspend lambda that performs the token refresh and persists the new token. Should return true
@@ -65,8 +70,7 @@ import kotlin.time.Duration.Companion.seconds
 class RestClient(
     private val baseUrl: String,
     private val defaultHeaders: Map<String, String> = emptyMap(),
-    private val retryPolicy: RetryPolicy = RetryPolicy(),
-    private val cachePolicy: CachePolicy = CachePolicy(),
+    private val cacheMaxEntries: Int = -1,
     private val tokenProvider: (suspend () -> String?)? = null,
     private val tokenRefresher: (suspend () -> Boolean)? = null,
     private val preemptiveRefresh: Duration = 60.seconds,
@@ -86,12 +90,8 @@ class RestClient(
         coerceInputValues = true
     }
 
-    private val responseCache: ResponseCache? =
-        if (cachePolicy.enabled) {
-            ResponseCache(cachePolicy.ttl, cachePolicy.maxEntries)
-        } else {
-            null
-        }
+    // Always present; the CacheInterceptor only stores/serves responses for @Cacheable endpoints.
+    private val responseCache = ResponseCache(cacheMaxEntries)
 
     val okHttpClient: OkHttpClient by lazy { buildOkHttpClient() }
 
@@ -148,8 +148,8 @@ class RestClient(
                 readTimeout(readTimeout)
                 writeTimeout(readTimeout)
 
-                // 1. Cache interceptor — may short-circuit on HIT before any network call
-                responseCache?.let { addInterceptor(CacheInterceptor(it)) }
+                // 1. Cache interceptor — may short-circuit on HIT before any network call (@Cacheable endpoints only)
+                addInterceptor(CacheInterceptor(responseCache))
 
                 // 2. Default headers + Bearer token injection
                 addInterceptor(
@@ -162,8 +162,8 @@ class RestClient(
                     ),
                 )
 
-                // 3. Retry on IOException / 5xx; explicitly skips 401
-                addInterceptor(RetryInterceptor(retryPolicy))
+                // 3. Retry on IOException / 5xx for @Retry endpoints; explicitly skips 401
+                addInterceptor(RetryInterceptor())
 
                 // 4. 401 → token refresh → retry (OkHttp Authenticator, separate from interceptors)
                 tokenRefresher?.let {

@@ -7,6 +7,7 @@ import com.google.devtools.ksp.processing.Resolver
 import com.google.devtools.ksp.processing.SymbolProcessor
 import com.google.devtools.ksp.symbol.ClassKind
 import com.google.devtools.ksp.symbol.KSAnnotated
+import com.google.devtools.ksp.symbol.KSAnnotation
 import com.google.devtools.ksp.symbol.KSClassDeclaration
 import com.google.devtools.ksp.symbol.KSFunctionDeclaration
 import com.google.devtools.ksp.symbol.Modifier
@@ -16,6 +17,7 @@ import com.squareup.kotlinpoet.ClassName
 import com.squareup.kotlinpoet.CodeBlock
 import com.squareup.kotlinpoet.FileSpec
 import com.squareup.kotlinpoet.FunSpec
+import com.squareup.kotlinpoet.INT
 import com.squareup.kotlinpoet.KModifier
 import com.squareup.kotlinpoet.LambdaTypeName
 import com.squareup.kotlinpoet.MAP
@@ -68,6 +70,10 @@ class RestServiceProcessor(
         val classResolver = service.typeParameters.toTypeParameterResolver()
         val functions = service.getDeclaredFunctions().toList()
 
+        // Service-level defaults: applied to eligible methods that don't declare their own policy.
+        val serviceCacheable = service.annotationNamed(CACHEABLE)
+        val serviceRetry = service.annotationNamed(RETRY)
+
         val retrofitInterface = TypeSpec
             .interfaceBuilder(retrofitName)
             .addModifiers(KModifier.INTERNAL)
@@ -80,15 +86,22 @@ class RestServiceProcessor(
                 continue
             }
 
+            validateRetryTarget(function)
+
             val funcResolver = function.typeParameters.toTypeParameterResolver(classResolver)
             val bodyType = function.returnType!!
                 .resolve()
                 .toTypeName(funcResolver)
                 .copy(nullable = false)
 
-            retrofitInterface.addFunction(buildRetrofitFunction(function, funcResolver, bodyType))
+            retrofitInterface.addFunction(
+                buildRetrofitFunction(function, funcResolver, bodyType, serviceCacheable, serviceRetry),
+            )
             clientMethods += buildClientMethod(function, funcResolver, bodyType)
         }
+
+        // maxEntries sizes the shared cache, so it's honored only from the service-level @Cacheable.
+        val cacheMaxEntries = serviceCacheable?.let { readIntArg(it, "maxEntries") }
 
         val retrofitFile = FileSpec
             .builder(packageName, retrofitName)
@@ -97,7 +110,7 @@ class RestServiceProcessor(
 
         val clientFile = FileSpec
             .builder(packageName, clientName)
-            .addType(buildClient(clientName, retrofitClass, clientMethods))
+            .addType(buildClient(clientName, retrofitClass, clientMethods, cacheMaxEntries))
             .build()
 
         val originating = listOfNotNull(service.containingFile)
@@ -105,24 +118,58 @@ class RestServiceProcessor(
         clientFile.writeTo(codeGenerator, aggregating = false, originatingKSFiles = originating)
     }
 
-    /** Copy of the user's method with the Retrofit annotations preserved and the return type wrapped in `Response<T>`. */
+    /**
+     * A method-level `@Retry`/`@NoRetry` may only be applied to idempotent verbs. Retrying a POST/PATCH could duplicate
+     * a non-idempotent request, so it's a compile-time error — mirroring the iOS macro's constraint.
+     */
+    private fun validateRetryTarget(function: KSFunctionDeclaration) {
+        val hasRetryAnnotation = function.hasAnnotation(RETRY) || function.hasAnnotation(NO_RETRY)
+        if (hasRetryAnnotation && function.httpVerb()?.idempotent == false) {
+            logger.error(
+                "@Retry/@NoRetry can only be applied to idempotent methods (GET, PUT, DELETE), not POST/PATCH.",
+                function,
+            )
+        }
+    }
+
+    /**
+     * Copy of the user's method with the Retrofit annotations preserved and the return type wrapped in`Response<T>`.
+     */
     private fun buildRetrofitFunction(
         function: KSFunctionDeclaration,
         funcResolver: TypeParameterResolver,
         bodyType: TypeName,
+        serviceCacheable: KSAnnotation?,
+        serviceRetry: KSAnnotation?,
     ): FunSpec {
         val builder = FunSpec
             .builder(function.simpleName.asString())
             .addModifiers(KModifier.ABSTRACT, KModifier.SUSPEND)
             .returns(RETROFIT_RESPONSE.parameterizedBy(bodyType))
 
+        // Method-level annotations (Retrofit verbs, @Cacheable/@Retry/@NoCache/@NoRetry, @SkipAuth) are copied
+        // verbatim.
         function.annotations.forEach { builder.addAnnotation(it.toAnnotationSpec()) }
+
+        // Propagate service-level defaults onto eligible methods that don't declare their own policy.
+        val verb = function.httpVerb()
+        val declaresCache = function.hasAnnotation(CACHEABLE) || function.hasAnnotation(NO_CACHE)
+        val declaresRetry = function.hasAnnotation(RETRY) || function.hasAnnotation(NO_RETRY)
+
+        if (serviceCacheable != null && verb == HttpVerb.GET && !declaresCache) {
+            builder.addAnnotation(serviceCacheable.toAnnotationSpec())
+        }
+
+        if (serviceRetry != null && verb?.idempotent == true && !declaresRetry) {
+            builder.addAnnotation(serviceRetry.toAnnotationSpec())
+        }
 
         function.parameters.forEach { param ->
             val paramSpec = ParameterSpec.builder(
                 param.name!!.asString(),
                 param.type.toTypeName(funcResolver),
             )
+
             param.annotations.forEach { paramSpec.addAnnotation(it.toAnnotationSpec()) }
             builder.addParameter(paramSpec.build())
         }
@@ -130,7 +177,9 @@ class RestServiceProcessor(
         return builder.build()
     }
 
-    /** Public facade method: same signature (minus Retrofit annotations), returns `RestResponse<T>`. */
+    /**
+     * Public facade method: same signature (minus Retrofit annotations), returns `RestResponse<T>`.
+     */
     private fun buildClientMethod(
         function: KSFunctionDeclaration,
         funcResolver: TypeParameterResolver,
@@ -158,6 +207,7 @@ class RestServiceProcessor(
         clientName: String,
         retrofitClass: ClassName,
         methods: List<FunSpec>,
+        cacheMaxEntries: Int?,
     ): TypeSpec {
         val primaryConstructor = FunSpec
             .constructorBuilder()
@@ -192,7 +242,7 @@ class RestServiceProcessor(
                     .builder("service", retrofitClass, KModifier.PRIVATE)
                     .initializer("client.retrofit.create(%T::class.java)", retrofitClass)
                     .build(),
-            ).addFunction(buildOwningConstructor())
+            ).addFunction(buildOwningConstructor(cacheMaxEntries))
             .addFunction(
                 FunSpec
                     .constructorBuilder()
@@ -206,14 +256,20 @@ class RestServiceProcessor(
 
     /**
      * The owning constructor: mirrors [RestClient]'s primary constructor parameters (see [CONFIG_PARAMS]) and forwards
-     * them positionally, so callers pass options directly — `baseUrl` mandatory, everything else optional — instead of a
-     * wrapper object. The defaults are kept in sync with [RestClient] manually.
+     * them positionally, so callers pass options directly — `baseUrl` mandatory, everything else optional — instead of
+     * a wrapper object. The defaults are kept in sync with [RestClient] manually.
      */
-    private fun buildOwningConstructor(): FunSpec {
+    private fun buildOwningConstructor(cacheMaxEntries: Int?): FunSpec {
         val builder = FunSpec.constructorBuilder()
         CONFIG_PARAMS.forEach { param ->
             val spec = ParameterSpec.builder(param.name, param.type)
-            param.default?.let { spec.defaultValue(it) }
+            // The service-level @Cacheable(maxEntries) sizes the shared cache; fall back to the static default.
+            val default = if (param.name == "cacheMaxEntries" && cacheMaxEntries != null) {
+                CodeBlock.of("%L", cacheMaxEntries)
+            } else {
+                param.default
+            }
+            default?.let { spec.defaultValue(it) }
             builder.addParameter(spec.build())
         }
 
@@ -237,13 +293,16 @@ class RestServiceProcessor(
     private companion object {
         const val SERVICE_ANNOTATION = "io.vinicius.sak.rest.annotation.Service"
 
+        const val CACHEABLE = "io.vinicius.sak.rest.annotation.Cacheable"
+        const val NO_CACHE = "io.vinicius.sak.rest.annotation.NoCache"
+        const val RETRY = "io.vinicius.sak.rest.annotation.Retry"
+        const val NO_RETRY = "io.vinicius.sak.rest.annotation.NoRetry"
+
         val REST_CLIENT = ClassName("io.vinicius.sak.rest", "RestClient")
         val REST_RESPONSE = ClassName("io.vinicius.sak.rest", "RestResponse")
         val RETROFIT_RESPONSE = ClassName("retrofit2", "Response")
         val AUTO_CLOSEABLE = ClassName("kotlin", "AutoCloseable")
 
-        val RETRY_POLICY = ClassName("io.vinicius.sak.rest", "RetryPolicy")
-        val CACHE_POLICY = ClassName("io.vinicius.sak.rest", "CachePolicy")
         val DURATION = ClassName("kotlin.time", "Duration")
         val SECONDS = MemberName(DURATION.nestedClass("Companion"), "seconds")
         val TOKEN_PROVIDER = LambdaTypeName
@@ -257,8 +316,7 @@ class RestServiceProcessor(
         val CONFIG_PARAMS = listOf(
             ConfigParam("baseUrl", STRING, null),
             ConfigParam("defaultHeaders", MAP.parameterizedBy(STRING, STRING), CodeBlock.of("emptyMap()")),
-            ConfigParam("retryPolicy", RETRY_POLICY, CodeBlock.of("%T()", RETRY_POLICY)),
-            ConfigParam("cachePolicy", CACHE_POLICY, CodeBlock.of("%T()", CACHE_POLICY)),
+            ConfigParam("cacheMaxEntries", INT, CodeBlock.of("%L", -1)),
             ConfigParam("tokenProvider", TOKEN_PROVIDER, CodeBlock.of("null")),
             ConfigParam("tokenRefresher", TOKEN_REFRESHER, CodeBlock.of("null")),
             ConfigParam("preemptiveRefresh", DURATION, CodeBlock.of("%L.%M", 60, SECONDS)),
@@ -267,3 +325,39 @@ class RestServiceProcessor(
         )
     }
 }
+
+/** Retrofit HTTP verbs the processor recognizes, and whether each is safe to retry. */
+private enum class HttpVerb(
+    val qualifiedName: String,
+    val idempotent: Boolean,
+) {
+    GET("retrofit2.http.GET", idempotent = true),
+    PUT("retrofit2.http.PUT", idempotent = true),
+    DELETE("retrofit2.http.DELETE", idempotent = true),
+    POST("retrofit2.http.POST", idempotent = false),
+    PATCH("retrofit2.http.PATCH", idempotent = false),
+}
+
+/** Fully-qualified name of an annotation usage, or null if it can't be resolved. */
+private fun KSAnnotation.qualifiedName(): String? =
+    annotationType
+        .resolve()
+        .declaration.qualifiedName
+        ?.asString()
+
+private fun KSAnnotated.annotationNamed(qualifiedName: String): KSAnnotation? =
+    annotations.firstOrNull { it.qualifiedName() == qualifiedName }
+
+private fun KSAnnotated.hasAnnotation(qualifiedName: String): Boolean = annotationNamed(qualifiedName) != null
+
+/** The Retrofit verb declared on [this], or null (e.g. custom `@HTTP`). */
+private fun KSFunctionDeclaration.httpVerb(): HttpVerb? {
+    val names = annotations.mapNotNull { it.qualifiedName() }.toSet()
+    return HttpVerb.entries.firstOrNull { it.qualifiedName in names }
+}
+
+/** Reads a named `Int` argument from an annotation usage (KSP resolves defaults), or null if absent. */
+private fun readIntArg(
+    annotation: KSAnnotation,
+    name: String,
+): Int? = annotation.arguments.firstOrNull { it.name?.asString() == name }?.value as? Int
