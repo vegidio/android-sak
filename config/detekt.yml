@@ -20,6 +20,8 @@ naming:
 style:
   ForbiddenComment:
     active: false
+  NewLineAtEndOfFile:
+    active: false
   MagicNumber:
     ignoreNumbers: ['-1', '0', '1', '2']
     ignoreHashCodeFunction: true

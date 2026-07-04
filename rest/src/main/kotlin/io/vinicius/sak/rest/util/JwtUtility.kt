@@ -15,6 +15,8 @@ import kotlin.time.Duration
  * is available on Android API 26+ (minSdk is 26) and also works in JVM unit tests.
  */
 internal object JwtUtility {
+    private const val MILLIS_PER_SECOND = 1_000L
+
     private val json = Json {
         ignoreUnknownKeys = true
     }
@@ -37,7 +39,7 @@ internal object JwtUtility {
                     ?.jsonPrimitive
                     ?.longOrNull ?: return null
 
-            Date(exp * 1_000L)
+            Date(exp * MILLIS_PER_SECOND)
         } catch (_: Exception) {
             null
         }
