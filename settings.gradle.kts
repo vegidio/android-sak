@@ -22,6 +22,3 @@ dependencyResolutionManagement {
 rootProject.name = "android-sak"
 
 include(":rest")
-include(":graphql")
-include(":view")
-include(":util")

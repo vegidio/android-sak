@@ -18,6 +18,8 @@ naming:
     functionPattern: '[a-zA-Z][a-zA-Z0-9]*'
 
 style:
+  ForbiddenComment:
+    active: false
   MagicNumber:
     ignoreNumbers: ['-1', '0', '1', '2']
     ignoreHashCodeFunction: true
