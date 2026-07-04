@@ -13,6 +13,7 @@ import mockwebserver3.MockWebServer
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNull
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
@@ -222,6 +223,39 @@ class ServiceClientTest {
             client.getB()
 
             assertEquals(2, server.requestCount)
+            client.close()
+        }
+
+    @Test
+    fun `logging closure receives OkHttp-style request and response blocks when enabled`() =
+        runBlocking {
+            server.enqueue(ok(user()))
+
+            val messages = mutableListOf<String>()
+            val client = TestApiClient(
+                baseUrl = baseUrl(),
+                tokenProvider = { "token-123" },
+                logging = { messages += it },
+            )
+            client.getUser(1)
+
+            val joined = messages.joinToString("\n")
+            assertTrue(joined.contains("--> GET"), "missing request line in: $joined")
+            assertTrue(joined.contains("<-- 200"), "missing response line in: $joined")
+            client.close()
+        }
+
+    @Test
+    fun `logging is disabled by default so no interceptor observes the request`() =
+        runBlocking {
+            server.enqueue(ok(user()))
+
+            // Omitting `logging` leaves the default (null): no HttpLoggingInterceptor is installed and the request
+            // completes normally. There is no sink to observe, which is exactly the off-by-default contract.
+            val client = TestApiClient(baseUrl = baseUrl())
+            val response = client.getUser(1)
+
+            assertEquals(1, response.body.id)
             client.close()
         }
 

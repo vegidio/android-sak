@@ -28,6 +28,7 @@ import com.squareup.kotlinpoet.PropertySpec
 import com.squareup.kotlinpoet.STRING
 import com.squareup.kotlinpoet.TypeName
 import com.squareup.kotlinpoet.TypeSpec
+import com.squareup.kotlinpoet.UNIT
 import com.squareup.kotlinpoet.ksp.TypeParameterResolver
 import com.squareup.kotlinpoet.ksp.toAnnotationSpec
 import com.squareup.kotlinpoet.ksp.toTypeName
@@ -311,6 +312,9 @@ class RestServiceProcessor(
         val TOKEN_REFRESHER = LambdaTypeName
             .get(returnType = BOOLEAN)
             .copy(nullable = true, suspending = true)
+        val LOGGING_TYPE = LambdaTypeName
+            .get(returnType = UNIT, parameters = arrayOf(STRING))
+            .copy(nullable = true)
 
         // Mirrors RestClient's primary constructor — same names, types, and order. Keep in sync.
         val CONFIG_PARAMS = listOf(
@@ -322,6 +326,7 @@ class RestServiceProcessor(
             ConfigParam("preemptiveRefresh", DURATION, CodeBlock.of("%L.%M", 60, SECONDS)),
             ConfigParam("connectTimeout", DURATION, CodeBlock.of("%L.%M", 30, SECONDS)),
             ConfigParam("readTimeout", DURATION, CodeBlock.of("%L.%M", 30, SECONDS)),
+            ConfigParam("logging", LOGGING_TYPE, CodeBlock.of("null")),
         )
     }
 }

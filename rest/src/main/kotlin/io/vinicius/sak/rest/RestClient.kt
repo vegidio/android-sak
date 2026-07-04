@@ -65,6 +65,9 @@ import kotlin.time.Duration.Companion.seconds
  *   preemptive refresh.
  * @param connectTimeout OkHttp connect timeout.
  * @param readTimeout OkHttp read/write timeout.
+ * @param logging Opt-in sink for OkHttp-style request/response logs; null (the default) disables logging entirely.
+ *   When set, requests are logged at BODY level — including full bodies and the injected `Authorization` header — so
+ *   callers should gate it behind a debug/build-type check to avoid leaking tokens/PII in production.
  */
 @Suppress("LongParameterList")
 class RestClient(
@@ -76,6 +79,7 @@ class RestClient(
     private val preemptiveRefresh: Duration = 60.seconds,
     private val connectTimeout: Duration = 30.seconds,
     private val readTimeout: Duration = 30.seconds,
+    private val logging: ((String) -> Unit)? = null,
 ) : AutoCloseable {
     // Current Bearer token — updated by init, AuthAuthenticator, and the preemptive refresher.
     // @Volatile ensures cross-thread visibility without a lock for simple reads.
@@ -178,8 +182,14 @@ class RestClient(
                     )
                 }
 
-                // 5. HTTP logging — outermost layer for maximum visibility
-                addInterceptor(HttpLoggingInterceptor().apply { level = HttpLoggingInterceptor.Level.BODY })
+                // 5. HTTP logging — opt-in; installed as the innermost application interceptor so it observes the
+                //    fully-adorned request (after HeaderInterceptor injects the Authorization token)
+                logging?.let { sink ->
+                    addInterceptor(
+                        HttpLoggingInterceptor { message -> sink(message) }
+                            .apply { level = HttpLoggingInterceptor.Level.BODY },
+                    )
+                }
             }.build()
 
     // endregion
