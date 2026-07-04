@@ -31,7 +31,7 @@ sealed class RestError : Exception() {
         override val message = "Decoding error: ${cause.message}"
     }
 
-    /** Token refresh was attempted but [RestConfiguration.tokenRefresher] returned false. */
+    /** Token refresh was attempted but [RestClient]'s `tokenRefresher` returned false. */
     data object TokenRefreshFailed : RestError() {
         override val message = "JWT token refresh failed"
     }

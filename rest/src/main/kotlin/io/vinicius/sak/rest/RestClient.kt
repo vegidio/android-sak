@@ -35,21 +35,42 @@ import kotlin.time.Duration.Companion.seconds
  * several services can share one instance (and its single token-refresh loop):
  * ```kotlin
  * val client = RestClient(
- *     RestConfiguration(
- *         baseUrl = "https://api.example.com/",
- *         defaultHeaders = mapOf("Accept" to "application/json"),
- *         tokenProvider = { tokenStore.get() },
- *         tokenRefresher = { authService.refresh(); true },
- *     )
+ *     baseUrl = "https://api.example.com/",
+ *     defaultHeaders = mapOf("Accept" to "application/json"),
+ *     tokenProvider = { tokenStore.get() },
+ *     tokenRefresher = { authService.refresh(); true },
  * )
  * val userApi = UserServiceClient(client)
  * ```
  *
+ * Only [baseUrl] is required; every other parameter is optional and falls back to a sensible default.
+ *
  * Call [close] when the client is no longer needed (e.g., on logout or in ViewModel.onCleared) to cancel the background
  * refresh coroutine and release OkHttp connections.
+ *
+ * @param baseUrl The base URL for all requests. Must end with '/'.
+ * @param defaultHeaders Headers added to every outgoing request.
+ * @param retryPolicy Retry behaviour on network failure or server error.
+ * @param cachePolicy In-memory response cache behaviour.
+ * @param tokenProvider Suspend lambda returning the current Bearer token, or null if unauthenticated. Called once at
+ *   startup and after each refresh to update the cached token.
+ * @param tokenRefresher Suspend lambda that performs the token refresh and persists the new token. Should return true
+ *   on success, false if the refresh failed.
+ * @param preemptiveRefresh How long before JWT expiry the background refresher fires. Set to [Duration.ZERO] to disable
+ *   preemptive refresh.
+ * @param connectTimeout OkHttp connect timeout.
+ * @param readTimeout OkHttp read/write timeout.
  */
 class RestClient(
-    private val config: RestConfiguration,
+    private val baseUrl: String,
+    private val defaultHeaders: Map<String, String> = emptyMap(),
+    private val retryPolicy: RetryPolicy = RetryPolicy(),
+    private val cachePolicy: CachePolicy = CachePolicy(),
+    private val tokenProvider: (suspend () -> String?)? = null,
+    private val tokenRefresher: (suspend () -> Boolean)? = null,
+    private val preemptiveRefresh: Duration = 60.seconds,
+    private val connectTimeout: Duration = 30.seconds,
+    private val readTimeout: Duration = 30.seconds,
 ) : AutoCloseable {
     // Current Bearer token — updated by init, AuthAuthenticator, and the preemptive refresher.
     // @Volatile ensures cross-thread visibility without a lock for simple reads.
@@ -65,8 +86,8 @@ class RestClient(
     }
 
     private val responseCache: ResponseCache? =
-        if (config.cachePolicy.enabled) {
-            ResponseCache(config.cachePolicy.ttl, config.cachePolicy.maxEntries)
+        if (cachePolicy.enabled) {
+            ResponseCache(cachePolicy.ttl, cachePolicy.maxEntries)
         } else {
             null
         }
@@ -76,7 +97,7 @@ class RestClient(
     val retrofit: Retrofit by lazy {
         Retrofit
             .Builder()
-            .baseUrl(config.baseUrl)
+            .baseUrl(baseUrl)
             .client(okHttpClient)
             .addConverterFactory(json.asConverterFactory("application/json; charset=UTF8".toMediaType()))
             .build()
@@ -84,7 +105,7 @@ class RestClient(
 
     init {
         scope.launch {
-            currentToken = config.tokenProvider?.invoke()
+            currentToken = tokenProvider?.invoke()
             startPreemptiveRefreshIfEnabled()
         }
     }
@@ -97,8 +118,8 @@ class RestClient(
      * @return true if the refresh succeeded, false otherwise.
      */
     suspend fun refreshToken(): Boolean {
-        val success = config.tokenRefresher?.invoke() ?: return false
-        if (success) currentToken = config.tokenProvider?.invoke()
+        val success = tokenRefresher?.invoke() ?: return false
+        if (success) currentToken = tokenProvider?.invoke()
         return success
     }
 
@@ -122,9 +143,9 @@ class RestClient(
         OkHttpClient
             .Builder()
             .apply {
-                connectTimeout(config.connectTimeout)
-                readTimeout(config.readTimeout)
-                writeTimeout(config.readTimeout)
+                connectTimeout(connectTimeout)
+                readTimeout(readTimeout)
+                writeTimeout(readTimeout)
 
                 // 1. Cache interceptor — may short-circuit on HIT before any network call
                 responseCache?.let { addInterceptor(CacheInterceptor(it)) }
@@ -132,25 +153,25 @@ class RestClient(
                 // 2. Default headers + Bearer token injection
                 addInterceptor(
                     HeaderInterceptor(
-                        defaultHeaders = config.defaultHeaders,
+                        defaultHeaders = defaultHeaders,
                         tokenProvider =
-                            config.tokenProvider?.let { provider ->
+                            tokenProvider?.let { provider ->
                                 { runBlocking { provider() }.also { token -> currentToken = token } }
                             },
                     ),
                 )
 
                 // 3. Retry on IOException / 5xx; explicitly skips 401
-                addInterceptor(RetryInterceptor(config.retryPolicy))
+                addInterceptor(RetryInterceptor(retryPolicy))
 
                 // 4. 401 → token refresh → retry (OkHttp Authenticator, separate from interceptors)
-                config.tokenRefresher?.let {
+                tokenRefresher?.let {
                     authenticator(
                         AuthAuthenticator(
                             tokenProvider = { currentToken },
                             tokenRefresher = it,
                             onTokenRefreshed = {
-                                config.tokenProvider?.invoke()?.also { token -> currentToken = token }
+                                tokenProvider?.invoke()?.also { token -> currentToken = token }
                             },
                         ),
                     )
@@ -165,8 +186,8 @@ class RestClient(
     // region Private — Preemptive JWT refresh
 
     private fun startPreemptiveRefreshIfEnabled() {
-        if (config.preemptiveRefresh <= Duration.ZERO) return
-        if (config.tokenProvider == null || config.tokenRefresher == null) return
+        if (preemptiveRefresh <= Duration.ZERO) return
+        if (tokenProvider == null || tokenRefresher == null) return
 
         refreshJob =
             scope.launch {
@@ -179,10 +200,10 @@ class RestClient(
 
     private suspend fun checkAndPreemptivelyRefresh() {
         val token = currentToken ?: return
-        if (JwtUtility.isExpiringSoon(token, config.preemptiveRefresh)) {
-            val success = config.tokenRefresher!!.invoke()
+        if (JwtUtility.isExpiringSoon(token, preemptiveRefresh)) {
+            val success = tokenRefresher!!.invoke()
             if (success) {
-                currentToken = config.tokenProvider?.invoke()
+                currentToken = tokenProvider?.invoke()
             }
         }
     }

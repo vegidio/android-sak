@@ -27,7 +27,7 @@ import okhttp3.Route
  * @param tokenRefresher Suspend lambda that performs the actual token refresh (HTTP call). Should persist the new token
  *   and return true on success.
  * @param onTokenRefreshed Suspend lambda called after a successful refresh to obtain the new token. Typically
- *   re-invokes [RestConfiguration.tokenProvider] after the refresher has persisted the new token.
+ *   re-invokes [io.vinicius.sak.rest.RestClient]'s `tokenProvider` after the refresher has persisted the new token.
  */
 internal class AuthAuthenticator(
     private val tokenProvider: () -> String?,

@@ -17,9 +17,13 @@ import com.squareup.kotlinpoet.CodeBlock
 import com.squareup.kotlinpoet.FileSpec
 import com.squareup.kotlinpoet.FunSpec
 import com.squareup.kotlinpoet.KModifier
+import com.squareup.kotlinpoet.LambdaTypeName
+import com.squareup.kotlinpoet.MAP
+import com.squareup.kotlinpoet.MemberName
 import com.squareup.kotlinpoet.ParameterSpec
 import com.squareup.kotlinpoet.ParameterizedTypeName.Companion.parameterizedBy
 import com.squareup.kotlinpoet.PropertySpec
+import com.squareup.kotlinpoet.STRING
 import com.squareup.kotlinpoet.TypeName
 import com.squareup.kotlinpoet.TypeSpec
 import com.squareup.kotlinpoet.ksp.TypeParameterResolver
@@ -187,13 +191,8 @@ class RestServiceProcessor(
                     .builder("service", retrofitClass, KModifier.PRIVATE)
                     .initializer("client.retrofit.create(%T::class.java)", retrofitClass)
                     .build(),
-            ).addFunction(
-                FunSpec
-                    .constructorBuilder()
-                    .addParameter("config", REST_CONFIGURATION)
-                    .callThisConstructor(CodeBlock.of("%T(config)", REST_CLIENT), CodeBlock.of("true"))
-                    .build(),
-            ).addFunction(
+            ).addFunction(buildOwningConstructor())
+            .addFunction(
                 FunSpec
                     .constructorBuilder()
                     .addParameter("client", REST_CLIENT)
@@ -204,13 +203,65 @@ class RestServiceProcessor(
             .build()
     }
 
+    /**
+     * The owning constructor: mirrors [RestClient]'s primary constructor parameters (see [CONFIG_PARAMS]) and forwards
+     * them positionally, so callers pass options directly — `baseUrl` mandatory, everything else optional — instead of a
+     * wrapper object. The defaults are kept in sync with [RestClient] manually.
+     */
+    private fun buildOwningConstructor(): FunSpec {
+        val builder = FunSpec.constructorBuilder()
+        CONFIG_PARAMS.forEach { param ->
+            val spec = ParameterSpec.builder(param.name, param.type)
+            param.default?.let { spec.defaultValue(it) }
+            builder.addParameter(spec.build())
+        }
+
+        val forwarded = CONFIG_PARAMS.joinToString(", ") { it.name }
+        builder.callThisConstructor(
+            CodeBlock.of("%T($forwarded)", REST_CLIENT),
+            CodeBlock.of("true"),
+        )
+
+        return builder.build()
+    }
+
+    /** A single [RestClient] constructor parameter to replicate on the generated client. */
+    private data class ConfigParam(
+        val name: String,
+        val type: TypeName,
+        val default: CodeBlock?,
+    )
+
     private companion object {
         const val SERVICE_ANNOTATION = "io.vinicius.sak.rest.annotation.Service"
 
         val REST_CLIENT = ClassName("io.vinicius.sak.rest", "RestClient")
-        val REST_CONFIGURATION = ClassName("io.vinicius.sak.rest", "RestConfiguration")
         val REST_RESPONSE = ClassName("io.vinicius.sak.rest", "RestResponse")
         val RETROFIT_RESPONSE = ClassName("retrofit2", "Response")
         val AUTO_CLOSEABLE = ClassName("kotlin", "AutoCloseable")
+
+        val RETRY_POLICY = ClassName("io.vinicius.sak.rest", "RetryPolicy")
+        val CACHE_POLICY = ClassName("io.vinicius.sak.rest", "CachePolicy")
+        val DURATION = ClassName("kotlin.time", "Duration")
+        val SECONDS = MemberName(DURATION.nestedClass("Companion"), "seconds")
+        val TOKEN_PROVIDER = LambdaTypeName
+            .get(returnType = STRING.copy(nullable = true))
+            .copy(nullable = true, suspending = true)
+        val TOKEN_REFRESHER = LambdaTypeName
+            .get(returnType = BOOLEAN)
+            .copy(nullable = true, suspending = true)
+
+        // Mirrors RestClient's primary constructor — same names, types, and order. Keep in sync.
+        val CONFIG_PARAMS = listOf(
+            ConfigParam("baseUrl", STRING, null),
+            ConfigParam("defaultHeaders", MAP.parameterizedBy(STRING, STRING), CodeBlock.of("emptyMap()")),
+            ConfigParam("retryPolicy", RETRY_POLICY, CodeBlock.of("%T()", RETRY_POLICY)),
+            ConfigParam("cachePolicy", CACHE_POLICY, CodeBlock.of("%T()", CACHE_POLICY)),
+            ConfigParam("tokenProvider", TOKEN_PROVIDER, CodeBlock.of("null")),
+            ConfigParam("tokenRefresher", TOKEN_REFRESHER, CodeBlock.of("null")),
+            ConfigParam("preemptiveRefresh", DURATION, CodeBlock.of("%L.%M", 60, SECONDS)),
+            ConfigParam("connectTimeout", DURATION, CodeBlock.of("%L.%M", 30, SECONDS)),
+            ConfigParam("readTimeout", DURATION, CodeBlock.of("%L.%M", 30, SECONDS)),
+        )
     }
 }

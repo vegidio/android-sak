@@ -16,7 +16,7 @@ package io.vinicius.sak.rest.annotation
  *     suspend fun getUser(@Path("id") id: Int): User
  * }
  *
- * val service = UserServiceClient(RestConfiguration(baseUrl = "https://api.example.com/"))
+ * val service = UserServiceClient(baseUrl = "https://api.example.com/")
  * val response = service.getUser(1) // RestResponse<User>
  * ```
  */

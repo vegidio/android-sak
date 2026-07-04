@@ -1,6 +1,5 @@
 package io.vinicius.sak.rest.service
 
-import io.vinicius.sak.rest.RestConfiguration
 import io.vinicius.sak.rest.annotation.Service
 import io.vinicius.sak.rest.annotation.SkipAuth
 import kotlinx.coroutines.runBlocking
@@ -73,7 +72,7 @@ class ServiceClientTest {
                     .build(),
             )
 
-            val client = TestApiClient(RestConfiguration(baseUrl = baseUrl(), tokenProvider = { "token-123" }))
+            val client = TestApiClient(baseUrl = baseUrl(), tokenProvider = { "token-123" })
             val response = client.getUser(1)
 
             assertEquals(1, response.body.id)
@@ -98,7 +97,7 @@ class ServiceClientTest {
                     .build(),
             )
 
-            val client = TestApiClient(RestConfiguration(baseUrl = baseUrl(), tokenProvider = { "token-123" }))
+            val client = TestApiClient(baseUrl = baseUrl(), tokenProvider = { "token-123" })
             val response = client.login(Credentials("a", "b"))
 
             assertEquals("jwt", response.body.value)

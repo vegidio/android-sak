@@ -32,7 +32,7 @@ class RestClientTest {
     fun `default headers are sent with every request`() {
         server.enqueue(response(200, "\"ok\""))
         val client =
-            RestClient(RestConfiguration(baseUrl = baseUrl(), defaultHeaders = mapOf("X-App-Version" to "2.0")))
+            RestClient(baseUrl = baseUrl(), defaultHeaders = mapOf("X-App-Version" to "2.0"))
         client.okHttpClient
             .newCall(
                 okhttp3.Request
@@ -50,14 +50,12 @@ class RestClientTest {
         var storedToken = "old-token"
         val client =
             RestClient(
-                RestConfiguration(
-                    baseUrl = baseUrl(),
-                    tokenProvider = { storedToken },
-                    tokenRefresher = {
-                        storedToken = "new-token"
-                        true
-                    },
-                ),
+                baseUrl = baseUrl(),
+                tokenProvider = { storedToken },
+                tokenRefresher = {
+                    storedToken = "new-token"
+                    true
+                },
             )
         Thread.sleep(100)
         assertEquals("old-token", client.currentToken)
@@ -73,15 +71,13 @@ class RestClientTest {
         val refreshCount = AtomicInteger(0)
         val client =
             RestClient(
-                RestConfiguration(
-                    baseUrl = baseUrl(),
-                    tokenProvider = { "token" },
-                    tokenRefresher = {
-                        refreshCount.incrementAndGet()
-                        true
-                    },
-                    preemptiveRefresh = 1.seconds,
-                ),
+                baseUrl = baseUrl(),
+                tokenProvider = { "token" },
+                tokenRefresher = {
+                    refreshCount.incrementAndGet()
+                    true
+                },
+                preemptiveRefresh = 1.seconds,
             )
         client.close()
         Thread.sleep(200)
@@ -96,14 +92,12 @@ class RestClientTest {
         var storedToken = "old-token"
         val client =
             RestClient(
-                RestConfiguration(
-                    baseUrl = baseUrl(),
-                    tokenProvider = { storedToken },
-                    tokenRefresher = {
-                        storedToken = "refreshed-token"
-                        true
-                    },
-                ),
+                baseUrl = baseUrl(),
+                tokenProvider = { storedToken },
+                tokenRefresher = {
+                    storedToken = "refreshed-token"
+                    true
+                },
             )
         Thread.sleep(100)
 
@@ -129,9 +123,7 @@ class RestClientTest {
         server.enqueue(response(200, """{"id":1}"""))
 
         val client =
-            RestClient(
-                RestConfiguration(baseUrl = baseUrl(), cachePolicy = CachePolicy(enabled = true, ttl = 60.seconds)),
-            )
+            RestClient(baseUrl = baseUrl(), cachePolicy = CachePolicy(enabled = true, ttl = 60.seconds))
 
         val request =
             okhttp3.Request

@@ -33,7 +33,7 @@ interface UserService {
     suspend fun getUser(@Path("id") id: Int): User
 }
 
-val service = UserServiceClient(RestConfiguration(baseUrl = "https://api.example.com/"))
+val service = UserServiceClient(baseUrl = "https://api.example.com/")
 
 val response = service.getUser(1)   // RestResponse<User>
 println(response.body.name)         // "Alice"
@@ -97,14 +97,14 @@ val response = service.getUser(id = 1, requestId = UUID.randomUUID().toString())
 
 ## Constructing a client
 
-The generated `<Name>Client` offers two constructors:
+The generated `<Name>Client` offers two constructors. Only `baseUrl` is required; every other option is optional:
 
 ```kotlin
-// 1. Owns its RestClient — pass a RestConfiguration directly.
-val users = UserServiceClient(RestConfiguration(baseUrl = "https://api.example.com/"))
+// 1. Owns its RestClient — pass the options directly.
+val users = UserServiceClient(baseUrl = "https://api.example.com/")
 
 // 2. Shares an existing RestClient across several services (one token-refresh loop for all).
-val client = RestClient(RestConfiguration(baseUrl = "https://api.example.com/"))
+val client = RestClient(baseUrl = "https://api.example.com/")
 val users = UserServiceClient(client)
 val orders = OrderServiceClient(client)
 ```
@@ -137,7 +137,7 @@ try {
 
 ## Configuration
 
-All behaviour is controlled through `RestConfiguration`, passed once when constructing a client.
+All behaviour is controlled through the client's constructor arguments, passed once when constructing a client.
 
 ### Default headers
 
@@ -145,13 +145,11 @@ Headers added to every request. A header already present on an individual reques
 
 ```kotlin
 val service = UserServiceClient(
-    RestConfiguration(
-        baseUrl = "https://api.example.com/",
-        defaultHeaders = mapOf(
-            "Accept" to "application/json",
-            "X-API-Version" to "2",
-        ),
-    )
+    baseUrl = "https://api.example.com/",
+    defaultHeaders = mapOf(
+        "Accept" to "application/json",
+        "X-API-Version" to "2",
+    ),
 )
 ```
 
@@ -161,10 +159,8 @@ Failed requests are retried automatically. The default policy retries up to 3 ti
 
 ```kotlin
 val service = UserServiceClient(
-    RestConfiguration(
-        baseUrl = "https://api.example.com/",
-        retryPolicy = RetryPolicy(maxAttempts = 5, delay = 2.seconds),
-    )
+    baseUrl = "https://api.example.com/",
+    retryPolicy = RetryPolicy(maxAttempts = 5, delay = 2.seconds),
 )
 ```
 
@@ -174,14 +170,12 @@ GET responses can be cached in memory with a configurable TTL. Once enabled, eve
 
 ```kotlin
 val service = UserServiceClient(
-    RestConfiguration(
-        baseUrl = "https://api.example.com/",
-        cachePolicy = CachePolicy(
-            enabled = true,
-            ttl = 60.seconds,   // cache entries expire after 60 seconds
-            maxEntries = 100,   // evict oldest entry when limit is reached
-        ),
-    )
+    baseUrl = "https://api.example.com/",
+    cachePolicy = CachePolicy(
+        enabled = true,
+        ttl = 60.seconds,   // cache entries expire after 60 seconds
+        maxEntries = 100,   // evict oldest entry when limit is reached
+    ),
 )
 
 // First call hits the network and stores the response.
@@ -197,10 +191,8 @@ Use `tokenProvider` to supply the current token. Once configured, every request 
 
 ```kotlin
 val service = UserServiceClient(
-    RestConfiguration(
-        baseUrl = "https://api.example.com/",
-        tokenProvider = { authStore.accessToken },
-    )
+    baseUrl = "https://api.example.com/",
+    tokenProvider = { authStore.accessToken },
 )
 ```
 
@@ -229,15 +221,13 @@ Provide `tokenRefresher` to fetch a new token when a 401 is received. The client
 
 ```kotlin
 val service = UserServiceClient(
-    RestConfiguration(
-        baseUrl = "https://api.example.com/",
-        tokenProvider = { authStore.accessToken },
-        tokenRefresher = {
-            val newToken = authApi.refresh(authStore.refreshToken)
-            authStore.accessToken = newToken
-            true   // return false to signal refresh failure
-        },
-    )
+    baseUrl = "https://api.example.com/",
+    tokenProvider = { authStore.accessToken },
+    tokenRefresher = {
+        val newToken = authApi.refresh(authStore.refreshToken)
+        authStore.accessToken = newToken
+        true   // return false to signal refresh failure
+    },
 )
 ```
 
@@ -247,16 +237,14 @@ Avoid 401 errors entirely by refreshing the token before it expires. Use `preemp
 
 ```kotlin
 val service = UserServiceClient(
-    RestConfiguration(
-        baseUrl = "https://api.example.com/",
-        tokenProvider = { authStore.accessToken },
-        tokenRefresher = {
-            val newToken = authApi.refresh(authStore.refreshToken)
-            authStore.accessToken = newToken
-            true
-        },
-        preemptiveRefresh = 60.seconds,   // refresh 60 s before expiry
-    )
+    baseUrl = "https://api.example.com/",
+    tokenProvider = { authStore.accessToken },
+    tokenRefresher = {
+        val newToken = authApi.refresh(authStore.refreshToken)
+        authStore.accessToken = newToken
+        true
+    },
+    preemptiveRefresh = 60.seconds,   // refresh 60 s before expiry
 )
 ```
 
@@ -265,9 +253,8 @@ val service = UserServiceClient(
 | Type | Role |
 |------|------|
 | `@Service` | Annotation on an interface — generates a `<Name>Client` |
-| `<Name>Client` | Generated client — construct with a `RestConfiguration` or a shared `RestClient` |
-| `RestConfiguration` | All client behaviour in one place |
-| `RestClient` | Underlying engine — share one across services via the client's secondary constructor |
+| `<Name>Client` | Generated client — construct with `baseUrl` + options, or a shared `RestClient` |
+| `RestClient` | Underlying engine — construct with `baseUrl` + options; share one across services via the client's secondary constructor |
 | `RetryPolicy` | `maxAttempts` + `delay` |
 | `CachePolicy` | `enabled`, `ttl`, `maxEntries` |
 | `RestResponse<T>` | Decoded response body + `statusCode` + `headers` |
