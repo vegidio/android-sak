@@ -15,7 +15,9 @@ import kotlin.time.Duration
  * is available on Android API 26+ (minSdk is 26) and also works in JVM unit tests.
  */
 internal object JwtUtility {
-    private val json = Json { ignoreUnknownKeys = true }
+    private val json = Json {
+        ignoreUnknownKeys = true
+    }
 
     /**
      * Parses [token] and returns the [Date] represented by the `exp` claim, or null if the token is malformed or the

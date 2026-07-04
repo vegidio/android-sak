@@ -14,6 +14,7 @@ ij_visual_guides = none
 [*.kt]
 ktlint_code_style = ktlint_official
 ktlint_function_naming_ignore_when_annotated_with = Composable
+ktlint_standard_multiline-expression-wrapping = disabled
 ij_kotlin_name_count_to_use_star_import = 999
 ij_kotlin_packages_to_use_import_on_demand = unset
 
