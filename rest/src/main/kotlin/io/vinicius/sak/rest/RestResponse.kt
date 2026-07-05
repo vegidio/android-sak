@@ -15,7 +15,9 @@ import java.io.IOException
  * @param body The deserialized response body, or `null` for a no-content response (HTTP 204/205) — in which case
  *   [statusCode], [headers], and [rawResponse] remain available for inspection.
  * @param statusCode HTTP status code (e.g. 200, 201, 204).
- * @param headers Response headers as a map of name to value.
+ * @param headers Response headers as a single-value convenience map of name to value. A header that appears more than
+ *   once (e.g. `Set-Cookie`, `Vary`) collapses to its **last** value here; to read every value for a repeated header,
+ *   use the escape hatch [rawResponse] — `rawResponse.headers().values("Set-Cookie")`.
  * @param rawResponse The underlying Retrofit [retrofit2.Response] this wrapper was built from.
  */
 data class RestResponse<T>(

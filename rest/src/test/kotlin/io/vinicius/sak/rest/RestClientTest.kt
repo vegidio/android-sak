@@ -5,6 +5,8 @@ import mockwebserver3.MockWebServer
 import okhttp3.Request
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertNotNull
+import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import java.util.Base64
@@ -147,5 +149,23 @@ class RestClientTest {
 
         assertEquals("A", server.takeRequest().headers["X-Client"])
         assertEquals("B", server.takeRequest().headers["X-Client"])
+    }
+
+    @Test
+    fun `malformed baseUrl throws InvalidUrl`() {
+        val client = RestClient(baseUrl = "not a url")
+        assertThrows(RestError.InvalidUrl::class.java) { client.retrofit }
+    }
+
+    @Test
+    fun `baseUrl not ending in slash throws InvalidUrl`() {
+        val client = RestClient(baseUrl = "https://api.example.com/v1")
+        assertThrows(RestError.InvalidUrl::class.java) { client.retrofit }
+    }
+
+    @Test
+    fun `well-formed baseUrl builds successfully`() {
+        val client = RestClient(baseUrl = "https://api.example.com/")
+        assertNotNull(client.retrofit)
     }
 }

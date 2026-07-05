@@ -8,8 +8,9 @@ import kotlin.time.Duration
  * In-memory TTL cache for raw response bodies stored as strings.
  *
  * Thread safety is provided by a [Mutex], mirroring Swift actor semantics from the iOS version. Entries are evicted
- * lazily on read (expired entry is removed and null is returned). When [maxEntries] is exceeded, the oldest
- * insertion-order entry is dropped (LRU-style), using a [LinkedHashMap] which preserves insertion order.
+ * lazily on read (expired entry is removed and null is returned). When [maxEntries] is exceeded, the
+ * least-recently-used entry is dropped (true LRU): the backing [LinkedHashMap] is created in access order, so every
+ * [get]/[put] moves the touched entry to the tail and eviction always removes the head (the least recently used).
  *
  * The TTL is supplied per entry at [put] time (from each endpoint's `@Cacheable(ttl)` annotation), so a single shared
  * cache can hold entries with different lifetimes. [kotlin.time.Duration.INFINITE] stores an entry that never expires.
@@ -24,7 +25,8 @@ internal class ResponseCache(
         val expiresAt: Long,
     )
 
-    private val store = LinkedHashMap<String, Entry>()
+    // accessOrder = true → get()/put() move the entry to the tail, so eviction drops the least recently used.
+    private val store = LinkedHashMap<String, Entry>(16, 0.75f, true)
     private val mutex = Mutex()
 
     /** Returns the cached response body for [key] if present and not expired, or null. */

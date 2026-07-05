@@ -8,6 +8,7 @@ import io.vinicius.sak.rest.interceptor.HttpStatus
 import io.vinicius.sak.rest.interceptor.RetryInterceptor
 import io.vinicius.sak.rest.interceptor.TokenRefreshCoordinator
 import kotlinx.serialization.json.Json
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Response
@@ -90,9 +91,17 @@ internal class RestClient(
     val okHttpClient: OkHttpClient by lazy { buildOkHttpClient() }
 
     val retrofit: Retrofit by lazy {
+        // Validate the base URL narrowly (mirroring Retrofit's own rules) so a bad URL surfaces as a typed
+        // RestError.InvalidUrl instead of a raw IllegalArgumentException — without masking unrelated builder errors.
+        // pathSegments is never empty (at least [""]); a trailing '/' means the last segment is "".
+        val httpUrl = baseUrl.toHttpUrlOrNull()
+        if (httpUrl == null || httpUrl.pathSegments.last().isNotEmpty()) {
+            throw RestError.InvalidUrl(baseUrl)
+        }
+
         Retrofit
             .Builder()
-            .baseUrl(baseUrl)
+            .baseUrl(httpUrl)
             .client(okHttpClient)
             .addConverterFactory(json.asConverterFactory("application/json; charset=UTF8".toMediaType()))
             .build()

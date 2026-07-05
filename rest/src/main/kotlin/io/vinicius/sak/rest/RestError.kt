@@ -2,7 +2,11 @@ package io.vinicius.sak.rest
 
 /** Typed errors produced by [RestClient] and its interceptors */
 sealed class RestError : Exception() {
-    /** The base URL or a composed request URL is malformed. */
+    /**
+     * The configured `baseUrl` is malformed or does not end in `/`. Thrown eagerly when the generated `<Name>Client`
+     * is constructed (the client builds its Retrofit instance up front), so a bad base URL fails fast as a typed
+     * [RestError] rather than a raw `IllegalArgumentException`.
+     */
     data class InvalidUrl(
         val url: String,
     ) : RestError() {

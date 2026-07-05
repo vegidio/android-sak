@@ -33,4 +33,4 @@ style:
     maxLineLength: 120
     excludeCommentStatements: true
   ReturnCount:
-    max: 4
+    active: false

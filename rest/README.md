@@ -110,13 +110,13 @@ val orders = OrderServiceClient(baseUrl = "https://api.example.com/")
 
 All failures are thrown as subtypes of `RestError`:
 
-| Type | When |
-|------|------|
-| `InvalidUrl(url)` | The URL string could not be parsed |
-| `Network(cause)` | A transport-level failure (no connection, timeout, etc.) |
-| `HttpError(statusCode, body)` | Server returned a non-2xx status after all retries |
-| `DecodingError(cause)` | Response body could not be decoded into `T` |
-| `TokenRefreshFailed` | A token refresh was attempted but `tokenRefresher` threw |
+| Type                          | When                                                     |
+|-------------------------------|----------------------------------------------------------|
+| `InvalidUrl(url)`             | The `baseUrl` is malformed or does not end in `/`        |
+| `Network(cause)`              | A transport-level failure (no connection, timeout, etc.) |
+| `HttpError(statusCode, body)` | Server returned a non-2xx status after all retries       |
+| `DecodingError(cause)`        | Response body could not be decoded into `T`              |
+| `TokenRefreshFailed`          | A token refresh was attempted but `tokenRefresher` threw |
 
 ```kotlin
 try {
@@ -145,6 +145,29 @@ val service = UserServiceClient(
         "Accept" to "application/json",
         "X-API-Version" to "2",
     ),
+)
+```
+
+### Timeouts
+
+`connectTimeout` and `readTimeout` (the latter also applies to writes) are OkHttp `Duration` values, each defaulting to 30 seconds:
+
+```kotlin
+val service = UserServiceClient(
+    baseUrl = "https://api.example.com/",
+    connectTimeout = 10.seconds,
+    readTimeout = 60.seconds,
+)
+```
+
+### Logging
+
+Logging is off by default. Pass a `logging: ((String) -> Unit)?` sink to receive OkHttp-style request/response text; omitting it installs no logging interceptor at all. When set, requests are logged at **BODY** level — including full request/response bodies and the injected `Authorization` header — so gate the sink behind a debug/build-type check to avoid leaking tokens or PII in production:
+
+```kotlin
+val service = UserServiceClient(
+    baseUrl = "https://api.example.com/",
+    logging = if (BuildConfig.DEBUG) { message -> Log.d("REST", message) } else null,
 )
 ```
 
@@ -266,12 +289,12 @@ val service = UserServiceClient(
 
 ## Key types
 
-| Type                      | Role                                                                                                                     |
-|---------------------------|--------------------------------------------------------------------------------------------------------------------------|
-| `@Service`                | Annotation on an interface — generates a `<Name>Client`                                                                  |
-| `<Name>Client`            | Generated client — the only entry point; construct with `baseUrl` + options                                             |
-| `@Cacheable` / `@NoCache` | Per-endpoint (or service-level) in-memory caching: `ttl` (seconds), `maxEntries`                                         |
-| `@Retry` / `@NoRetry`     | Per-endpoint (or service-level) retry: `maxAttempts`, `delay` (seconds, `Double`); idempotent verbs only                 |
-| `RestResponse<T>`         | Nullable `body` (null on 204/205) + `statusCode` + `headers` + `rawResponse` (raw Retrofit `Response<T>`)                |
-| `RestError`               | Sealed error hierarchy thrown on every failure by the generated client                                                   |
-| `@SkipAuth`               | Annotation to skip auth injection on a single endpoint                                                                   |
+| Type                      | Role                                                                                                      |
+|---------------------------|-----------------------------------------------------------------------------------------------------------|
+| `@Service`                | Annotation on an interface — generates a `<Name>Client`                                                   |
+| `<Name>Client`            | Generated client — the only entry point; construct with `baseUrl` + options                               |
+| `@Cacheable` / `@NoCache` | Per-endpoint (or service-level) in-memory caching: `ttl` (seconds), `maxEntries`                          |
+| `@Retry` / `@NoRetry`     | Per-endpoint (or service-level) retry: `maxAttempts`, `delay` (seconds, `Double`); idempotent verbs only  |
+| `RestResponse<T>`         | Nullable `body` (null on 204/205) + `statusCode` + `headers` + `rawResponse` (raw Retrofit `Response<T>`) |
+| `RestError`               | Sealed error hierarchy thrown on every failure by the generated client                                    |
+| `@SkipAuth`               | Annotation to skip auth injection on a single endpoint                                                    |

@@ -48,6 +48,19 @@ class ResponseCacheTest {
         }
 
     @Test
+    fun `eviction is true LRU - a recently read entry is protected`() =
+        runTest {
+            val cache = ResponseCache(maxEntries = 2)
+            cache.put("key1", "value1", 60.seconds)
+            cache.put("key2", "value2", 60.seconds)
+            cache.get("key1") // touch key1 so key2 becomes least-recently-used
+            cache.put("key3", "value3", 60.seconds) // should evict key2, not key1
+            assertEquals("value1", cache.get("key1"))
+            assertNull(cache.get("key2"))
+            assertEquals("value3", cache.get("key3"))
+        }
+
+    @Test
     fun `clear removes all entries`() =
         runTest {
             val cache = ResponseCache(maxEntries = 10)

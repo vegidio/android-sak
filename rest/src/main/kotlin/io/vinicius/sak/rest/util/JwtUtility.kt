@@ -4,14 +4,14 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.longOrNull
-import java.util.Base64
 import java.util.Date
+import kotlin.io.encoding.Base64
 
 /**
  * Lightweight JWT utility that extracts the expiry claim without verifying the signature.
  *
- * Only the payload section (index 1) is decoded. No third-party JWT library is required. Uses [java.util.Base64] which
- * is available on Android API 26+ (minSdk is 26) and also works in JVM unit tests.
+ * Only the payload section (index 1) is decoded. No third-party JWT library is required. Uses the Kotlin stdlib
+ * [Base64] (stable since Kotlin 2.2), decoding the URL-safe, unpadded JWT payload directly.
  */
 internal object JwtUtility {
     private const val MILLIS_PER_SECOND = 1_000L
@@ -32,14 +32,16 @@ internal object JwtUtility {
             val parts = raw.split(".")
             if (parts.size < 2) return null
 
-            val payloadBytes = Base64.getUrlDecoder().decode(parts[1].padEnd((parts[1].length + 3) / 4 * 4, '='))
+            val payloadBytes = Base64.UrlSafe
+                .withPadding(Base64.PaddingOption.ABSENT_OPTIONAL)
+                .decode(parts[1])
+
             val payload = String(payloadBytes, Charsets.UTF_8)
-            val exp =
-                json
-                    .parseToJsonElement(payload)
-                    .jsonObject["exp"]
-                    ?.jsonPrimitive
-                    ?.longOrNull ?: return null
+            val exp = json
+                .parseToJsonElement(payload)
+                .jsonObject["exp"]
+                ?.jsonPrimitive
+                ?.longOrNull ?: return null
 
             Date(exp * MILLIS_PER_SECOND)
         } catch (_: Exception) {
