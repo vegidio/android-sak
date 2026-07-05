@@ -1,5 +1,6 @@
 package io.vinicius.sak.rest.service
 
+import io.vinicius.sak.rest.RestError
 import io.vinicius.sak.rest.annotation.Cacheable
 import io.vinicius.sak.rest.annotation.NoCache
 import io.vinicius.sak.rest.annotation.NoRetry
@@ -56,7 +57,7 @@ interface TestApi {
     suspend fun health(): User
 
     @GET("flaky")
-    @Retry(maxAttempts = 3, delay = 0)
+    @Retry(maxAttempts = 3, delay = 0.0)
     suspend fun flaky(): User
 
     @SkipAuth
@@ -72,7 +73,7 @@ interface TestApi {
  */
 @Service
 @Cacheable(ttl = 60, maxEntries = 50)
-@Retry(maxAttempts = 3, delay = 0)
+@Retry(maxAttempts = 3, delay = 0.0)
 interface DefaultsApi {
     @GET("a/{id}")
     suspend fun getA(
@@ -110,22 +111,95 @@ class ServiceClientTest {
     private fun user(id: Int = 1) = """{"id":$id,"name":"Alice"}"""
 
     @Test
-    fun `generated client wraps the body in RestResponse with status and headers`() =
+    fun `generated client wraps the body in RestResponse with status, headers, and rawResponse`() =
         runBlocking {
             server.enqueue(ok(user(), "X-Trace" to "abc"))
 
-            val client = TestApiClient(baseUrl = baseUrl(), tokenProvider = { "token-123" })
+            val client = TestApiClient(baseUrl = baseUrl(), tokenProvider = { "Bearer token-123" })
             val response = client.getUser(1)
 
-            assertEquals(1, response.body.id)
-            assertEquals("Alice", response.body.name)
+            val body = response.body!!
+            assertEquals(1, body.id)
+            assertEquals("Alice", body.name)
             assertEquals(200, response.statusCode)
             assertEquals("abc", response.headers["X-Trace"])
+            // rawResponse exposes the underlying Retrofit response.
+            assertEquals(200, response.rawResponse.code())
 
             val recorded = server.takeRequest()
             assertEquals("/users/1", recorded.url.encodedPath)
+            // Token is sent verbatim — the provider owns the scheme.
             assertEquals("Bearer token-123", recorded.headers["Authorization"])
-            client.close()
+        }
+
+    @Test
+    fun `no-content 204 response yields a null body with inspectable metadata`() =
+        runBlocking {
+            server.enqueue(
+                MockResponse
+                    .Builder()
+                    .code(204)
+                    .addHeader("X-Trace", "z")
+                    .build(),
+            )
+
+            val client = TestApiClient(baseUrl = baseUrl())
+            val response = client.health()
+
+            assertNull(response.body)
+            assertEquals(204, response.statusCode)
+            assertEquals("z", response.headers["X-Trace"])
+            assertEquals(204, response.rawResponse.code())
+        }
+
+    @Test
+    fun `non-2xx surfaces as RestError HttpError with status and body`() =
+        runBlocking {
+            server.enqueue(
+                MockResponse
+                    .Builder()
+                    .code(404)
+                    .body("nope")
+                    .build(),
+            )
+
+            val client = TestApiClient(baseUrl = baseUrl())
+            val error = assertThrows<RestError.HttpError> { client.health() }
+
+            assertEquals(404, error.statusCode)
+            assertEquals("nope", error.body)
+        }
+
+    @Test
+    fun `malformed JSON surfaces as RestError DecodingError`() =
+        runBlocking {
+            server.enqueue(ok("not-json"))
+
+            val client = TestApiClient(baseUrl = baseUrl())
+            assertThrows<RestError.DecodingError> { client.health() }
+        }
+
+    @Test
+    fun `network failure surfaces as RestError Network`() =
+        runBlocking {
+            // Nothing is listening on this port, so the connection is refused.
+            val client = TestApiClient(baseUrl = "http://localhost:1/")
+            assertThrows<RestError.Network> { client.health() }
+        }
+
+    @Test
+    fun `token refresh failure surfaces as RestError TokenRefreshFailed`() =
+        runBlocking {
+            server.enqueue(MockResponse.Builder().code(401).build())
+
+            val client =
+                TestApiClient(
+                    baseUrl = baseUrl(),
+                    tokenProvider = { "Bearer old" },
+                    tokenRefresher = { throw IllegalStateException("refresh boom") },
+                )
+            val error = assertThrows<RestError> { client.health() }
+            assertEquals(RestError.TokenRefreshFailed, error)
         }
 
     @Test
@@ -133,12 +207,11 @@ class ServiceClientTest {
         runBlocking {
             server.enqueue(ok("""{"value":"jwt"}"""))
 
-            val client = TestApiClient(baseUrl = baseUrl(), tokenProvider = { "token-123" })
+            val client = TestApiClient(baseUrl = baseUrl(), tokenProvider = { "Bearer token-123" })
             val response = client.login(Credentials("a", "b"))
 
-            assertEquals("jwt", response.body.value)
+            assertEquals("jwt", response.body!!.value)
             assertNull(server.takeRequest().headers["Authorization"])
-            client.close()
         }
 
     @Test
@@ -150,9 +223,8 @@ class ServiceClientTest {
             client.getUser(1)
             val second = client.getUser(1)
 
-            assertEquals(1, second.body.id)
+            assertEquals(1, second.body!!.id)
             assertEquals(1, server.requestCount)
-            client.close()
         }
 
     @Test
@@ -166,7 +238,6 @@ class ServiceClientTest {
             client.health()
 
             assertEquals(2, server.requestCount)
-            client.close()
         }
 
     @Test
@@ -179,9 +250,8 @@ class ServiceClientTest {
             val client = TestApiClient(baseUrl = baseUrl())
             val response = client.flaky()
 
-            assertEquals(1, response.body.id)
+            assertEquals(1, response.body!!.id)
             assertEquals(3, server.requestCount)
-            client.close()
         }
 
     @Test
@@ -194,7 +264,6 @@ class ServiceClientTest {
             client.getA(1)
 
             assertEquals(1, server.requestCount)
-            client.close()
         }
 
     @Test
@@ -207,9 +276,8 @@ class ServiceClientTest {
             val client = DefaultsApiClient(baseUrl = baseUrl())
             val response = client.getA(1)
 
-            assertEquals(1, response.body.id)
+            assertEquals(1, response.body!!.id)
             assertEquals(3, server.requestCount)
-            client.close()
         }
 
     @Test
@@ -223,7 +291,6 @@ class ServiceClientTest {
             client.getB()
 
             assertEquals(2, server.requestCount)
-            client.close()
         }
 
     @Test
@@ -234,7 +301,7 @@ class ServiceClientTest {
             val messages = mutableListOf<String>()
             val client = TestApiClient(
                 baseUrl = baseUrl(),
-                tokenProvider = { "token-123" },
+                tokenProvider = { "Bearer token-123" },
                 logging = { messages += it },
             )
             client.getUser(1)
@@ -242,7 +309,6 @@ class ServiceClientTest {
             val joined = messages.joinToString("\n")
             assertTrue(joined.contains("--> GET"), "missing request line in: $joined")
             assertTrue(joined.contains("<-- 200"), "missing response line in: $joined")
-            client.close()
         }
 
     @Test
@@ -255,8 +321,7 @@ class ServiceClientTest {
             val client = TestApiClient(baseUrl = baseUrl())
             val response = client.getUser(1)
 
-            assertEquals(1, response.body.id)
-            client.close()
+            assertEquals(1, response.body!!.id)
         }
 
     @Test
@@ -265,9 +330,25 @@ class ServiceClientTest {
             server.enqueue(MockResponse.Builder().code(500).build())
 
             val client = DefaultsApiClient(baseUrl = baseUrl())
-            assertThrows<IllegalStateException> { client.getC() }
+            assertThrows<RestError.HttpError> { client.getC() }
 
             assertEquals(1, server.requestCount)
-            client.close()
+        }
+
+    @Test
+    fun `two clients keep independent configuration`() =
+        runBlocking {
+            server.enqueue(ok(user()))
+            server.enqueue(ok(user()))
+
+            val clientA = TestApiClient(baseUrl = baseUrl(), tokenProvider = { "Bearer A" })
+            val clientB = TestApiClient(baseUrl = baseUrl(), tokenProvider = { "Bearer B" })
+
+            clientA.health()
+            clientB.health()
+
+            // Each client sends only its own token — no shared state leaks between instances.
+            assertEquals("Bearer A", server.takeRequest().headers["Authorization"])
+            assertEquals("Bearer B", server.takeRequest().headers["Authorization"])
         }
 }

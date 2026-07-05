@@ -88,6 +88,7 @@ class RestServiceProcessor(
             }
 
             validateRetryTarget(function)
+            validateCacheTarget(function)
 
             val funcResolver = function.typeParameters.toTypeParameterResolver(classResolver)
             val bodyType = function.returnType!!
@@ -128,6 +129,28 @@ class RestServiceProcessor(
         if (hasRetryAnnotation && function.httpVerb()?.idempotent == false) {
             logger.error(
                 "@Retry/@NoRetry can only be applied to idempotent methods (GET, PUT, DELETE), not POST/PATCH.",
+                function,
+            )
+        }
+    }
+
+    /**
+     * A method-level `@Cacheable` may only appear on a GET method, and may not set `maxEntries` — the latter sizes the
+     * shared cache and is honored only from the service-level annotation. Both are compile-time errors, mirroring the
+     * iOS macro's constraints.
+     */
+    private fun validateCacheTarget(function: KSFunctionDeclaration) {
+        val cacheable = function.annotationNamed(CACHEABLE) ?: return
+
+        if (function.httpVerb() != HttpVerb.GET) {
+            logger.error("@Cacheable can only be applied to GET methods.", function)
+        }
+
+        val maxEntries = readIntArg(cacheable, "maxEntries")
+        if (maxEntries != null && maxEntries != CACHE_UNLIMITED) {
+            logger.error(
+                "@Cacheable(maxEntries) is not allowed on a method; set it on the @Service interface instead — " +
+                    "it sizes the shared cache.",
                 function,
             )
         }
@@ -198,8 +221,9 @@ class RestServiceProcessor(
         }
 
         val callArgs = paramNames.joinToString(", ") { "%N" }
-        val statementArgs = listOf(REST_RESPONSE, funcName, *paramNames.toTypedArray()).toTypedArray()
-        builder.addStatement("return %T.from(service.%N($callArgs))", *statementArgs)
+        val statementArgs = listOf(REST_CALL, funcName, *paramNames.toTypedArray()).toTypedArray()
+        // Delegate through restCall so every failure maps onto the sealed RestError hierarchy.
+        builder.addStatement("return %M { service.%N($callArgs) }", *statementArgs)
 
         return builder.build()
     }
@@ -209,58 +233,31 @@ class RestServiceProcessor(
         retrofitClass: ClassName,
         methods: List<FunSpec>,
         cacheMaxEntries: Int?,
-    ): TypeSpec {
-        val primaryConstructor = FunSpec
-            .constructorBuilder()
-            .addModifiers(KModifier.PRIVATE)
-            .addParameter("client", REST_CLIENT)
-            .addParameter("ownsClient", BOOLEAN)
-            .build()
-
-        val closeFunction = FunSpec
-            .builder("close")
-            .addModifiers(KModifier.OVERRIDE)
-            .addStatement("if (ownsClient) client.close()")
-            .build()
-
-        return TypeSpec
+    ): TypeSpec =
+        TypeSpec
             .classBuilder(clientName)
             .addKdoc("Generated REST client. Do not edit.")
-            .addSuperinterface(AUTO_CLOSEABLE)
-            .primaryConstructor(primaryConstructor)
-            .addProperty(
-                PropertySpec
-                    .builder("client", REST_CLIENT, KModifier.PRIVATE)
-                    .initializer("client")
-                    .build(),
-            ).addProperty(
-                PropertySpec
-                    .builder("ownsClient", BOOLEAN, KModifier.PRIVATE)
-                    .initializer("ownsClient")
-                    .build(),
-            ).addProperty(
+            .superclass(SERVICE_CLIENT)
+            .primaryConstructor(buildConfigConstructor(cacheMaxEntries))
+            .apply {
+                // Forward each option to the ServiceClient base by name so a reorder of the base/RestClient
+                // constructor fails to compile loudly.
+                CONFIG_PARAMS.forEach { addSuperclassConstructorParameter("%L = %L", it.name, it.name) }
+            }.addProperty(
                 PropertySpec
                     .builder("service", retrofitClass, KModifier.PRIVATE)
-                    .initializer("client.retrofit.create(%T::class.java)", retrofitClass)
-                    .build(),
-            ).addFunction(buildOwningConstructor(cacheMaxEntries))
-            .addFunction(
-                FunSpec
-                    .constructorBuilder()
-                    .addParameter("client", REST_CLIENT)
-                    .callThisConstructor(CodeBlock.of("client"), CodeBlock.of("false"))
+                    // Uses the protected `retrofit` inherited from ServiceClient.
+                    .initializer("retrofit.create(%T::class.java)", retrofitClass)
                     .build(),
             ).addFunctions(methods)
-            .addFunction(closeFunction)
             .build()
-    }
 
     /**
-     * The owning constructor: mirrors [RestClient]'s primary constructor parameters (see [CONFIG_PARAMS]) and forwards
-     * them positionally, so callers pass options directly — `baseUrl` mandatory, everything else optional — instead of
-     * a wrapper object. The defaults are kept in sync with [RestClient] manually.
+     * The generated client's primary constructor: mirrors [RestClient]'s constructor parameters (see [CONFIG_PARAMS],
+     * which the [ServiceClient] base forwards to), so callers pass options directly — `baseUrl` mandatory, everything
+     * else optional. The defaults are kept in sync with [RestClient] manually.
      */
-    private fun buildOwningConstructor(cacheMaxEntries: Int?): FunSpec {
+    private fun buildConfigConstructor(cacheMaxEntries: Int?): FunSpec {
         val builder = FunSpec.constructorBuilder()
         CONFIG_PARAMS.forEach { param ->
             val spec = ParameterSpec.builder(param.name, param.type)
@@ -273,14 +270,6 @@ class RestServiceProcessor(
             default?.let { spec.defaultValue(it) }
             builder.addParameter(spec.build())
         }
-
-        // Forward by name (not position) so a reorder of RestClient's constructor fails loudly.
-        val forwarded = CONFIG_PARAMS.joinToString(", ") { "${it.name} = ${it.name}" }
-        builder.callThisConstructor(
-            CodeBlock.of("%T($forwarded)", REST_CLIENT),
-            CodeBlock.of("true"),
-        )
-
         return builder.build()
     }
 
@@ -299,10 +288,14 @@ class RestServiceProcessor(
         const val RETRY = "io.vinicius.sak.rest.annotation.Retry"
         const val NO_RETRY = "io.vinicius.sak.rest.annotation.NoRetry"
 
-        val REST_CLIENT = ClassName("io.vinicius.sak.rest", "RestClient")
+        // Mirrors Cacheable.UNLIMITED — the default that means "no method-level maxEntries was set".
+        const val CACHE_UNLIMITED = -1
+
+        val SERVICE_CLIENT = ClassName("io.vinicius.sak.rest", "ServiceClient")
         val REST_RESPONSE = ClassName("io.vinicius.sak.rest", "RestResponse")
+        val REST_CALL = MemberName("io.vinicius.sak.rest", "restCall")
         val RETROFIT_RESPONSE = ClassName("retrofit2", "Response")
-        val AUTO_CLOSEABLE = ClassName("kotlin", "AutoCloseable")
+        val OKHTTP_RESPONSE = ClassName("okhttp3", "Response")
 
         val DURATION = ClassName("kotlin.time", "Duration")
         val SECONDS = MemberName(DURATION.nestedClass("Companion"), "seconds")
@@ -310,20 +303,24 @@ class RestServiceProcessor(
             .get(returnType = STRING.copy(nullable = true))
             .copy(nullable = true, suspending = true)
         val TOKEN_REFRESHER = LambdaTypeName
-            .get(returnType = BOOLEAN)
+            .get(returnType = STRING)
             .copy(nullable = true, suspending = true)
+        val IS_UNAUTHORIZED = LambdaTypeName
+            .get(returnType = BOOLEAN, parameters = arrayOf(OKHTTP_RESPONSE))
         val LOGGING_TYPE = LambdaTypeName
             .get(returnType = UNIT, parameters = arrayOf(STRING))
             .copy(nullable = true)
 
-        // Mirrors RestClient's primary constructor — same names, types, and order. Keep in sync.
+        // Mirrors RestClient's primary constructor — same names, types, and order. The generated client forwards
+        // these to the ServiceClient base, which forwards them to RestClient. Keep all three in sync.
         val CONFIG_PARAMS = listOf(
             ConfigParam("baseUrl", STRING, null),
             ConfigParam("defaultHeaders", MAP.parameterizedBy(STRING, STRING), CodeBlock.of("emptyMap()")),
             ConfigParam("cacheMaxEntries", INT, CodeBlock.of("%L", -1)),
             ConfigParam("tokenProvider", TOKEN_PROVIDER, CodeBlock.of("null")),
             ConfigParam("tokenRefresher", TOKEN_REFRESHER, CodeBlock.of("null")),
-            ConfigParam("preemptiveRefresh", DURATION, CodeBlock.of("%L.%M", 60, SECONDS)),
+            ConfigParam("preemptiveRefresh", DURATION.copy(nullable = true), CodeBlock.of("%L.%M", 60, SECONDS)),
+            ConfigParam("isUnauthorized", IS_UNAUTHORIZED, CodeBlock.of("{ it.code == %L }", 401)),
             ConfigParam("connectTimeout", DURATION, CodeBlock.of("%L.%M", 30, SECONDS)),
             ConfigParam("readTimeout", DURATION, CodeBlock.of("%L.%M", 30, SECONDS)),
             ConfigParam("logging", LOGGING_TYPE, CodeBlock.of("null")),

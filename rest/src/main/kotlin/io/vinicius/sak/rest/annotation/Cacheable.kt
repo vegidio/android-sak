@@ -5,8 +5,12 @@ package io.vinicius.sak.rest.annotation
  *
  * Place it on a single method to cache that endpoint, or on the [@Service][Service] interface to cache every GET method
  * by default. A method-level annotation overrides the service-level one, and [@NoCache][NoCache] disables caching for a
- * method that would otherwise inherit the service default. Caching only ever applies to GET requests — the annotation is
- * ignored on other verbs.
+ * method that would otherwise inherit the service default.
+ *
+ * A **method-level** `@Cacheable` may only be applied to a GET method — applying it to another verb is a compile-time
+ * error. Likewise, `maxEntries` sizes the shared cache and may only be set on the service-level annotation; setting it
+ * on a method is a compile-time error. A service-level `@Cacheable` is applied to GET methods only and silently skipped
+ * for other verbs.
  *
  * At compile time the `rest-compiler` KSP processor copies the resolved annotation onto the generated
  * `<Name>Retrofit` method, and [io.vinicius.sak.rest.interceptor.CacheInterceptor] reads it at runtime via Retrofit's
@@ -29,8 +33,8 @@ package io.vinicius.sak.rest.annotation
  *
  * @param ttl Time-to-live for a cached entry, in seconds. Defaults to [NEVER_EXPIRES] (-1): entries never expire.
  * @param maxEntries Maximum number of entries held in memory before oldest-first eviction. Defaults to [UNLIMITED]
- *   (-1): no limit. This sizes the shared cache and is therefore honored only from the service-level annotation; a
- *   method-level value is ignored.
+ *   (-1): no limit. This sizes the shared cache and may only be set on the service-level annotation; setting it on a
+ *   method is a compile-time error.
  */
 @Target(AnnotationTarget.CLASS, AnnotationTarget.FUNCTION)
 @Retention(AnnotationRetention.RUNTIME)

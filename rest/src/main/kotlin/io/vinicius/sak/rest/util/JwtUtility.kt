@@ -27,7 +27,10 @@ internal object JwtUtility {
      */
     fun expiryDate(token: String): Date? {
         return try {
-            val parts = token.split(".")
+            // Tokens are stored verbatim (scheme included, e.g. "Bearer eyJ…"); drop any leading "scheme " prefix
+            // before decoding. A bare JWT has no spaces, so this is a no-op for it.
+            val raw = token.substringAfter(' ')
+            val parts = raw.split(".")
             if (parts.size < 2) return null
 
             val payloadBytes = Base64.getUrlDecoder().decode(parts[1].padEnd((parts[1].length + 3) / 4 * 4, '='))

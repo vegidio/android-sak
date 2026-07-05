@@ -7,15 +7,18 @@ import mockwebserver3.MockResponse
 import mockwebserver3.MockWebServer
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import okhttp3.Response
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.assertThrows
 import retrofit2.Invocation
 import java.lang.reflect.Method
 import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.atomic.AtomicReference
 
-class AuthAuthenticatorTest {
+class AuthInterceptorTest {
     private val server = MockWebServer()
 
     @BeforeEach fun setUp() = server.start()
@@ -23,25 +26,22 @@ class AuthAuthenticatorTest {
     @AfterEach fun tearDown() = server.close()
 
     private fun clientWith(
-        tokenProvider: () -> String? = { "old-token" },
-        tokenRefresher: suspend () -> Boolean = { true },
-        onTokenRefreshed: suspend () -> String? = { "new-token" },
-    ): OkHttpClient =
-        OkHttpClient
+        isUnauthorized: (Response) -> Boolean = { it.code == 401 },
+        tokenProvider: suspend () -> String? = { "Bearer old" },
+        tokenRefresher: suspend () -> String = { "Bearer new" },
+    ): OkHttpClient {
+        val coordinator = TokenRefreshCoordinator(tokenProvider, tokenRefresher)
+        return OkHttpClient
             .Builder()
-            .authenticator(
-                AuthAuthenticator(
-                    tokenProvider = tokenProvider,
-                    tokenRefresher = tokenRefresher,
-                    onTokenRefreshed = onTokenRefreshed,
-                ),
-            ).build()
+            .addInterceptor(AuthInterceptor(isUnauthorized, coordinator))
+            .build()
+    }
 
     private fun authenticatedGet(): Request =
         Request
             .Builder()
             .url(server.url("/protected"))
-            .header("Authorization", "Bearer old-token")
+            .header("Authorization", "Bearer old")
             .build()
 
     private fun response(
@@ -54,14 +54,14 @@ class AuthAuthenticatorTest {
         .build()
 
     @Test
-    fun `200 response does not invoke authenticator`() {
+    fun `2xx response does not trigger a refresh`() {
         server.enqueue(response(200, "ok"))
         val refreshCount = AtomicInteger(0)
         val client =
             clientWith(
                 tokenRefresher = {
                     refreshCount.incrementAndGet()
-                    true
+                    "Bearer new"
                 },
             )
         client.newCall(authenticatedGet()).execute()
@@ -70,22 +70,35 @@ class AuthAuthenticatorTest {
     }
 
     @Test
-    fun `401 triggers token refresh and retry with new token`() {
+    fun `unauthorized triggers refresh and retry with the new verbatim token`() {
         server.enqueue(response(401))
         server.enqueue(response(200, "ok"))
         val response = clientWith().newCall(authenticatedGet()).execute()
         assertEquals(200, response.code)
         assertEquals(2, server.requestCount)
-        assertEquals("Bearer old-token", server.takeRequest().headers["Authorization"])
-        assertEquals("Bearer new-token", server.takeRequest().headers["Authorization"])
+        assertEquals("Bearer old", server.takeRequest().headers["Authorization"])
+        assertEquals("Bearer new", server.takeRequest().headers["Authorization"])
     }
 
     @Test
-    fun `tokenRefresher returning false propagates 401`() {
+    fun `custom predicate treats a non-401 status as unauthorized`() {
+        server.enqueue(response(419))
+        server.enqueue(response(200, "ok"))
+        val response =
+            clientWith(isUnauthorized = { it.code == 419 })
+                .newCall(authenticatedGet())
+                .execute()
+        assertEquals(200, response.code)
+        assertEquals(2, server.requestCount)
+        assertEquals("Bearer old", server.takeRequest().headers["Authorization"])
+        assertEquals("Bearer new", server.takeRequest().headers["Authorization"])
+    }
+
+    @Test
+    fun `refresher throwing surfaces as a TokenRefreshException`() {
         server.enqueue(response(401))
-        val response = clientWith(tokenRefresher = { false }).newCall(authenticatedGet()).execute()
-        assertEquals(401, response.code)
-        assertEquals(1, server.requestCount)
+        val client = clientWith(tokenRefresher = { throw IllegalStateException("boom") })
+        assertThrows<TokenRefreshException> { client.newCall(authenticatedGet()).execute() }
     }
 
     @Test
@@ -96,7 +109,7 @@ class AuthAuthenticatorTest {
             clientWith(
                 tokenRefresher = {
                     refreshCount.incrementAndGet()
-                    true
+                    "Bearer new"
                 },
             )
         val request = Request.Builder().url(server.url("/public")).build()
@@ -106,7 +119,7 @@ class AuthAuthenticatorTest {
     }
 
     @Test
-    fun `SkipAuth endpoint is not retried on 401`() {
+    fun `SkipAuth endpoint is not retried on unauthorized`() {
         server.enqueue(response(401))
         val refreshCount = AtomicInteger(0)
         val method = mockk<Method>(relaxed = true)
@@ -118,43 +131,39 @@ class AuthAuthenticatorTest {
             clientWith(
                 tokenRefresher = {
                     refreshCount.incrementAndGet()
-                    true
+                    "Bearer new"
                 },
             )
         val request =
             Request
                 .Builder()
                 .url(server.url("/login"))
-                .header("Authorization", "Bearer token")
+                .header("Authorization", "Bearer old")
                 .tag(Invocation::class.java, invocation)
                 .build()
-        client.newCall(request).execute()
+        val response = client.newCall(request).execute()
+        assertEquals(401, response.code)
         assertEquals(0, refreshCount.get())
     }
 
     @Test
-    fun `concurrent 401s call tokenRefresher exactly once`() {
+    fun `concurrent unauthorized responses refresh exactly once`() {
         val refreshCount = AtomicInteger(0)
-        var currentToken = "old-token"
+        val currentToken = AtomicReference("Bearer old")
 
         repeat(2) { server.enqueue(response(401)) }
         repeat(2) { server.enqueue(response(200, "ok")) }
 
         val client =
-            OkHttpClient
-                .Builder()
-                .authenticator(
-                    AuthAuthenticator(
-                        tokenProvider = { currentToken },
-                        tokenRefresher = {
-                            Thread.sleep(50)
-                            refreshCount.incrementAndGet()
-                            currentToken = "new-token"
-                            true
-                        },
-                        onTokenRefreshed = { currentToken },
-                    ),
-                ).build()
+            clientWith(
+                tokenProvider = { currentToken.get() },
+                tokenRefresher = {
+                    Thread.sleep(50)
+                    refreshCount.incrementAndGet()
+                    currentToken.set("Bearer new")
+                    "Bearer new"
+                },
+            )
 
         val threads = (1..2).map { Thread { client.newCall(authenticatedGet()).execute() } }
         threads.forEach { it.start() }

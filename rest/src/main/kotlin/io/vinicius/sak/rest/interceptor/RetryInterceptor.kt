@@ -23,20 +23,19 @@ import kotlin.time.Duration.Companion.seconds
  * - 5xx server error responses.
  *
  * Retries do NOT occur on:
- * - 401 Unauthorized — handled exclusively by [AuthAuthenticator] (OkHttp's Authenticator).
- * - Any other 4xx client error — these are deterministic failures; retrying won't help.
+ * - Any 4xx client error — these are deterministic failures; retrying won't help. An "unauthorized" response is
+ *   returned as-is so the outer [AuthInterceptor] can refresh the token and retry once.
  * - 2xx or 3xx — success / redirects.
  *
- * This strict separation prevents a 401 from being retried twice (once here, once by the Authenticator). The delay
- * between retries is applied via [kotlinx.coroutines.delay] inside [runBlocking], which is safe here because OkHttp
- * interceptors run on OkHttp's own thread pool, never on the Android main thread.
+ * The delay between retries is applied via [kotlinx.coroutines.delay] inside [runBlocking], which is safe here because
+ * OkHttp interceptors run on OkHttp's own thread pool, never on the Android main thread.
  */
 internal class RetryInterceptor : Interceptor {
     override fun intercept(chain: Interceptor.Chain): Response {
         val request = chain.request()
         val retry = request.retry()
         val maxAttempts = retry?.maxAttempts ?: 1
-        val delayDuration = (retry?.delay ?: 0).seconds
+        val delayDuration = (retry?.delay ?: 0.0).seconds
 
         var response: Response? = null
         var lastException: IOException? = null
@@ -47,10 +46,7 @@ internal class RetryInterceptor : Interceptor {
                 response = chain.proceed(request)
 
                 when (response.code) {
-                    // AuthAuthenticator handles 401
-                    HttpStatus.UNAUTHORIZED -> return response
-
-                    // client error, no retry
+                    // client error (incl. 401) — no retry here; AuthInterceptor handles the auth-refresh path
                     in HttpStatus.CLIENT_ERROR_RANGE -> return response
 
                     // success or redirect

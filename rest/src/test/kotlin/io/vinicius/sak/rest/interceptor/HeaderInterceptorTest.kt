@@ -19,7 +19,12 @@ class HeaderInterceptorTest {
     private fun buildInterceptor(
         headers: Map<String, String> = emptyMap(),
         token: String? = null,
-    ) = HeaderInterceptor(defaultHeaders = headers, tokenProvider = if (token != null || true) ({ token }) else null)
+    ) = HeaderInterceptor(
+        defaultHeaders = headers,
+        tokenProvider = { token },
+        coordinator = null,
+        preemptiveRefresh = null,
+    )
 
     private fun makeChain(request: Request): Interceptor.Chain {
         val chain = mockk<Interceptor.Chain>()
@@ -76,18 +81,19 @@ class HeaderInterceptorTest {
     }
 
     @Test
-    fun `Bearer token is injected when tokenProvider returns non-null`() {
-        val interceptor = buildInterceptor(token = "my-token")
+    fun `token is injected verbatim when tokenProvider returns non-null`() {
+        // The provider owns the scheme; the interceptor must not prepend "Bearer ".
+        val interceptor = buildInterceptor(token = "Custom abc123")
         val captured = slot<Request>()
         val chain = mockk<Interceptor.Chain>()
         every { chain.request() } returns plainRequest()
         every { chain.proceed(capture(captured)) } returns mockk(relaxed = true)
         interceptor.intercept(chain)
-        assertEquals("Bearer my-token", captured.captured.header("Authorization"))
+        assertEquals("Custom abc123", captured.captured.header("Authorization"))
     }
 
     @Test
-    fun `Bearer token is NOT injected when tokenProvider returns null`() {
+    fun `token is NOT injected when tokenProvider returns null`() {
         val interceptor = buildInterceptor(token = null)
         val captured = slot<Request>()
         val chain = mockk<Interceptor.Chain>()
@@ -110,7 +116,13 @@ class HeaderInterceptorTest {
 
     @Test
     fun `no Authorization header when tokenProvider is null`() {
-        val interceptor = HeaderInterceptor(defaultHeaders = emptyMap(), tokenProvider = null)
+        val interceptor =
+            HeaderInterceptor(
+                defaultHeaders = emptyMap(),
+                tokenProvider = null,
+                coordinator = null,
+                preemptiveRefresh = null,
+            )
         val captured = slot<Request>()
         val chain = mockk<Interceptor.Chain>()
         every { chain.request() } returns plainRequest()

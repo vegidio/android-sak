@@ -2,7 +2,7 @@
 
 A high-level HTTP client for REST APIs built on [Retrofit](https://github.com/square/retrofit) and [OkHttp](https://github.com/square/okhttp). Handles retry, caching, default headers, and automatic token refresh so you only write request logic.
 
-You declare your API as an interface annotated with `@Service`; at compile time the `rest-compiler` KSP processor generates a `<Name>Client` for you. You declare each method's **body type** as its return type, and the generated client returns that body wrapped in a `RestResponse<T>` (body + status code + headers).
+You declare your API as an interface annotated with `@Service`; at compile time the `rest-compiler` KSP processor generates a `<Name>Client` for you. You declare each method's **body type** as its return type, and the generated client returns that body wrapped in a `RestResponse<T>` (body + status code + headers + the raw Retrofit response).
 
 ## Setup
 
@@ -36,7 +36,7 @@ interface UserService {
 val service = UserServiceClient(baseUrl = "https://api.example.com/")
 
 val response = service.getUser(1)   // RestResponse<User>
-println(response.body.name)         // "Alice"
+println(response.body?.name)        // "Alice" (body is null for 204/205 no-content responses)
 println(response.statusCode)        // 200
 ```
 
@@ -97,19 +97,14 @@ val response = service.getUser(id = 1, requestId = UUID.randomUUID().toString())
 
 ## Constructing a client
 
-The generated `<Name>Client` offers two constructors. Only `baseUrl` is required; every other option is optional:
+Construct the generated `<Name>Client` directly — only `baseUrl` is required; every other option is optional. Each client is standalone (there is no shared engine to manage or pass around):
 
 ```kotlin
-// 1. Owns its RestClient — pass the options directly.
 val users = UserServiceClient(baseUrl = "https://api.example.com/")
-
-// 2. Shares an existing RestClient across several services (one token-refresh loop for all).
-val client = RestClient(baseUrl = "https://api.example.com/")
-val users = UserServiceClient(client)
-val orders = OrderServiceClient(client)
+val orders = OrderServiceClient(baseUrl = "https://api.example.com/")
 ```
 
-> **Note:** Call `close()` when a client is no longer needed (e.g. on logout or `ViewModel.onCleared()`) to cancel the background refresh coroutine and release OkHttp resources. A client created with constructor (1) closes its `RestClient`; a client created with constructor (2) leaves the shared `RestClient` open — close that yourself.
+> **Note:** There is no lifecycle to manage — the client holds no background threads, so there is no `close()` to call. Preemptive token refresh is evaluated per request, and OkHttp releases idle connections and threads on its own.
 
 ## Error handling
 
@@ -121,7 +116,7 @@ All failures are thrown as subtypes of `RestError`:
 | `Network(cause)` | A transport-level failure (no connection, timeout, etc.) |
 | `HttpError(statusCode, body)` | Server returned a non-2xx status after all retries |
 | `DecodingError(cause)` | Response body could not be decoded into `T` |
-| `TokenRefreshFailed` | Token refresh was attempted but `tokenRefresher` returned `false` |
+| `TokenRefreshFailed` | A token refresh was attempted but `tokenRefresher` threw |
 
 ```kotlin
 try {
@@ -155,16 +150,16 @@ val service = UserServiceClient(
 
 ### Retry
 
-Retry is opt-in per endpoint via `@Retry`. Annotate the service interface to set a default for every idempotent method, or a single method to override it; `@NoRetry` disables retries for a method that would otherwise inherit the service default. Retries trigger on network failures and 5xx server errors. `delay` is in seconds; a request with no `@Retry` is attempted exactly once.
+Retry is opt-in per endpoint via `@Retry`. Annotate the service interface to set a default for every idempotent method, or a single method to override it; `@NoRetry` disables retries for a method that would otherwise inherit the service default. Retries trigger on network failures and 5xx server errors. `delay` is in seconds as a `Double`, so fractional values like `0.5` are allowed; a request with no `@Retry` is attempted exactly once.
 
 Only idempotent verbs (GET, PUT, DELETE) may be retried — putting `@Retry`/`@NoRetry` on a `@POST`/`@PATCH` method is a compile-time error.
 
 ```kotlin
 @Service
-@Retry(maxAttempts = 3, delay = 1) // default for all idempotent methods
+@Retry(maxAttempts = 3, delay = 1.0) // default for all idempotent methods
 interface UserService {
     @GET("users/{id}")
-    @Retry(maxAttempts = 5, delay = 2) // override for this endpoint
+    @Retry(maxAttempts = 5, delay = 0.5) // override for this endpoint
     suspend fun getUser(@Path("id") id: Int): User
 
     @GET("health")
@@ -175,7 +170,9 @@ interface UserService {
 
 ### Caching
 
-GET responses can be cached in memory via `@Cacheable`. Annotate the service interface to cache every GET method by default, or a single method to override it; `@NoCache` disables caching for a method that would otherwise inherit the service default. The second call with the same URL returns the cached response without hitting the network. `ttl` is in seconds and defaults to never expiring; `maxEntries` defaults to unlimited (and sizes the shared cache, so it is honored only at service level).
+GET responses can be cached in memory via `@Cacheable`. Annotate the service interface to cache every GET method by default, or a single method to override it; `@NoCache` disables caching for a method that would otherwise inherit the service default. The second call with the same URL returns the cached response without hitting the network. `ttl` is in seconds (`Long`) and defaults to never expiring; `maxEntries` defaults to unlimited (and sizes the shared cache, so it is honored only at service level).
+
+Two constraints are enforced at compile time: a **method-level** `@Cacheable` may only be applied to a GET method, and `maxEntries` may only be set on the service-level annotation (setting it on a method is a compile-time error).
 
 ```kotlin
 @Service
@@ -195,12 +192,12 @@ interface UserService {
 
 ### Attaching a token to every request
 
-Use `tokenProvider` to supply the current token. Once configured, every request automatically receives an `Authorization: Bearer <token>` header.
+Use `tokenProvider` to supply the current `Authorization` header value. The value is used **verbatim** — your closure owns the scheme (`"Bearer …"`, `"Token …"`, or anything else), and nothing is prepended for you. Once configured, every request that isn't `@SkipAuth` receives that value as its `Authorization` header.
 
 ```kotlin
 val service = UserServiceClient(
     baseUrl = "https://api.example.com/",
-    tokenProvider = { authStore.accessToken },
+    tokenProvider = { "Bearer ${authStore.accessToken}" },
 )
 ```
 
@@ -223,48 +220,58 @@ interface AuthService {
 }
 ```
 
-### Automatic token refresh on 401
+### Automatic token refresh on an auth failure
 
-Provide `tokenRefresher` to fetch a new token when a 401 is received. The client refreshes the token once and retries the original request automatically. Concurrent requests that all hit 401 share a single refresh call.
+Provide `tokenRefresher` to fetch a new token when a request comes back unauthorized. It **returns the new verbatim `Authorization` header value** and must **throw** on failure (a failure surfaces to the caller as `RestError.TokenRefreshFailed`). The client refreshes the token once and retries the original request automatically; concurrent requests that all fail share a single refresh call.
 
 ```kotlin
 val service = UserServiceClient(
     baseUrl = "https://api.example.com/",
-    tokenProvider = { authStore.accessToken },
+    tokenProvider = { "Bearer ${authStore.accessToken}" },
     tokenRefresher = {
-        val newToken = authApi.refresh(authStore.refreshToken)
+        val newToken = authApi.refresh(authStore.refreshToken)   // throws on failure
         authStore.accessToken = newToken
-        true   // return false to signal refresh failure
+        "Bearer $newToken"   // the new header value, applied to the retry
     },
+)
+```
+
+What counts as an "auth failure" is configurable via `isUnauthorized: (okhttp3.Response) -> Boolean`, defaulting to HTTP 401. Override it to treat another status as a refresh trigger:
+
+```kotlin
+val service = UserServiceClient(
+    baseUrl = "https://api.example.com/",
+    tokenProvider = { "Bearer ${authStore.accessToken}" },
+    tokenRefresher = { "Bearer ${authApi.refresh(authStore.refreshToken)}" },
+    isUnauthorized = { it.code == 401 || it.code == 419 },
 )
 ```
 
 ### Preemptive JWT refresh
 
-Avoid 401 errors entirely by refreshing the token before it expires. Use `preemptiveRefresh` to control how far in advance to refresh (default: 60 seconds). The client polls the token expiry in the background and refreshes automatically when it falls within the threshold.
+Avoid auth failures entirely by refreshing the token before it expires. Use `preemptiveRefresh` to control how far in advance to refresh (default: 60 seconds). On **every request**, the client reads the JWT `exp` claim from the current token and, if it falls within the window, refreshes before sending — no background thread is involved. Opaque (non-JWT) tokens have no readable expiry and are only refreshed reactively. Set `preemptiveRefresh = null` (or `Duration.ZERO`) to disable it.
 
 ```kotlin
 val service = UserServiceClient(
     baseUrl = "https://api.example.com/",
-    tokenProvider = { authStore.accessToken },
+    tokenProvider = { "Bearer ${authStore.accessToken}" },
     tokenRefresher = {
         val newToken = authApi.refresh(authStore.refreshToken)
         authStore.accessToken = newToken
-        true
+        "Bearer $newToken"
     },
-    preemptiveRefresh = 60.seconds,   // refresh 60 s before expiry
+    preemptiveRefresh = 60.seconds,   // refresh within 60 s of expiry
 )
 ```
 
 ## Key types
 
-| Type | Role |
-|------|------|
-| `@Service` | Annotation on an interface — generates a `<Name>Client` |
-| `<Name>Client` | Generated client — construct with `baseUrl` + options, or a shared `RestClient` |
-| `RestClient` | Underlying engine — construct with `baseUrl` + options; share one across services via the client's secondary constructor |
-| `@Cacheable` / `@NoCache` | Per-endpoint (or service-level) in-memory caching: `ttl` (seconds), `maxEntries` |
-| `@Retry` / `@NoRetry` | Per-endpoint (or service-level) retry: `maxAttempts`, `delay` (seconds); idempotent verbs only |
-| `RestResponse<T>` | Decoded response body + `statusCode` + `headers` |
-| `RestError` | Sealed error hierarchy thrown on failure |
-| `@SkipAuth` | Annotation to skip auth injection on a single endpoint |
+| Type                      | Role                                                                                                                     |
+|---------------------------|--------------------------------------------------------------------------------------------------------------------------|
+| `@Service`                | Annotation on an interface — generates a `<Name>Client`                                                                  |
+| `<Name>Client`            | Generated client — the only entry point; construct with `baseUrl` + options                                             |
+| `@Cacheable` / `@NoCache` | Per-endpoint (or service-level) in-memory caching: `ttl` (seconds), `maxEntries`                                         |
+| `@Retry` / `@NoRetry`     | Per-endpoint (or service-level) retry: `maxAttempts`, `delay` (seconds, `Double`); idempotent verbs only                 |
+| `RestResponse<T>`         | Nullable `body` (null on 204/205) + `statusCode` + `headers` + `rawResponse` (raw Retrofit `Response<T>`)                |
+| `RestError`               | Sealed error hierarchy thrown on every failure by the generated client                                                   |
+| `@SkipAuth`               | Annotation to skip auth injection on a single endpoint                                                                   |

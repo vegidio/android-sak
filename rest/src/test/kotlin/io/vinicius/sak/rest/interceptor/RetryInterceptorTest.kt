@@ -8,6 +8,7 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
@@ -29,11 +30,14 @@ class RetryInterceptorTest {
      * `delay = 0` keeps the tests fast.
      */
     private interface Endpoints {
-        @Retry(maxAttempts = 3, delay = 0)
+        @Retry(maxAttempts = 3, delay = 0.0)
         fun retry3()
 
-        @Retry(maxAttempts = 1, delay = 0)
+        @Retry(maxAttempts = 1, delay = 0.0)
         fun retry1()
+
+        @Retry(maxAttempts = 2, delay = 0.5)
+        fun retryFractional()
 
         @NoRetry
         fun noRetry()
@@ -126,6 +130,19 @@ class RetryInterceptorTest {
         val response = client.newCall(request("retry1")).execute()
         assertEquals(500, response.code)
         assertEquals(1, server.requestCount)
+    }
+
+    @Test
+    fun `fractional delay is honored between retries`() {
+        server.enqueue(response(500))
+        server.enqueue(response(200, "ok"))
+        val elapsed =
+            kotlin.system.measureTimeMillis {
+                client.newCall(request("retryFractional")).execute()
+            }
+        // One 0.5s delay between the two attempts; allow slack for scheduling jitter.
+        assertTrue(elapsed >= 450, "expected a ~0.5s delay, was ${elapsed}ms")
+        assertEquals(2, server.requestCount)
     }
 
     @Test

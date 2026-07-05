@@ -2,11 +2,12 @@ package io.vinicius.sak.rest
 
 import mockwebserver3.MockResponse
 import mockwebserver3.MockWebServer
+import okhttp3.Request
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertEquals
-import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import java.util.Base64
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.time.Duration.Companion.seconds
 
@@ -28,93 +29,123 @@ class RestClientTest {
         .apply { body?.let { body(it) } }
         .build()
 
+    private fun get(
+        client: RestClient,
+        path: String,
+    ) = client.okHttpClient
+        .newCall(Request.Builder().url(server.url(path)).build())
+        .execute()
+
+    /** Builds an unsigned JWT whose `exp` claim is [expiresInSeconds] from now. */
+    private fun jwt(expiresInSeconds: Long): String {
+        val exp = System.currentTimeMillis() / 1_000 + expiresInSeconds
+        val header = base64Url("""{"alg":"none"}""")
+        val payload = base64Url("""{"exp":$exp}""")
+        return "$header.$payload.sig"
+    }
+
+    private fun base64Url(value: String): String =
+        Base64.getUrlEncoder().withoutPadding().encodeToString(value.toByteArray())
+
     @Test
     fun `default headers are sent with every request`() {
         server.enqueue(response(200, "\"ok\""))
-        val client =
-            RestClient(baseUrl = baseUrl(), defaultHeaders = mapOf("X-App-Version" to "2.0"))
-        client.okHttpClient
-            .newCall(
-                okhttp3.Request
-                    .Builder()
-                    .url(server.url("/data"))
-                    .build(),
-            ).execute()
-        val recorded = server.takeRequest()
-        assertEquals("2.0", recorded.headers["X-App-Version"])
-        client.close()
+        val client = RestClient(baseUrl = baseUrl(), defaultHeaders = mapOf("X-App-Version" to "2.0"))
+        get(client, "/data")
+        assertEquals("2.0", server.takeRequest().headers["X-App-Version"])
     }
 
     @Test
-    fun `refreshToken calls tokenRefresher and updates currentToken`() {
-        var storedToken = "old-token"
-        val client =
-            RestClient(
-                baseUrl = baseUrl(),
-                tokenProvider = { storedToken },
-                tokenRefresher = {
-                    storedToken = "new-token"
-                    true
-                },
-            )
-        Thread.sleep(100)
-        assertEquals("old-token", client.currentToken)
-
-        val result = kotlinx.coroutines.runBlocking { client.refreshToken() }
-        assertTrue(result)
-        assertEquals("new-token", client.currentToken)
-        client.close()
+    fun `token is sent verbatim`() {
+        server.enqueue(response(200, "\"ok\""))
+        val client = RestClient(baseUrl = baseUrl(), tokenProvider = { "Bearer verbatim-xyz" })
+        get(client, "/data")
+        assertEquals("Bearer verbatim-xyz", server.takeRequest().headers["Authorization"])
     }
 
     @Test
-    fun `close cancels preemptive refresh with no further calls`() {
-        val refreshCount = AtomicInteger(0)
-        val client =
-            RestClient(
-                baseUrl = baseUrl(),
-                tokenProvider = { "token" },
-                tokenRefresher = {
-                    refreshCount.incrementAndGet()
-                    true
-                },
-                preemptiveRefresh = 1.seconds,
-            )
-        client.close()
-        Thread.sleep(200)
-        assertEquals(0, refreshCount.get())
-    }
-
-    @Test
-    fun `end-to-end 401 triggers refresh and retry with new token`() {
+    fun `end-to-end unauthorized triggers refresh and retry with the new verbatim token`() {
         server.enqueue(response(401))
-        server.enqueue(response(200, "ok"))
+        server.enqueue(response(200, "\"ok\""))
 
-        var storedToken = "old-token"
+        var storedToken = "Bearer old-token"
         val client =
             RestClient(
                 baseUrl = baseUrl(),
                 tokenProvider = { storedToken },
                 tokenRefresher = {
-                    storedToken = "refreshed-token"
-                    true
+                    storedToken = "Bearer refreshed-token"
+                    storedToken
                 },
             )
-        Thread.sleep(100)
 
-        val result =
-            client.okHttpClient
-                .newCall(
-                    okhttp3.Request
-                        .Builder()
-                        .url(server.url("/protected"))
-                        .header("Authorization", "Bearer old-token")
-                        .build(),
-                ).execute()
+        val result = get(client, "/protected")
 
         assertEquals(200, result.code)
         assertEquals(2, server.requestCount)
         assertEquals("Bearer old-token", server.takeRequest().headers["Authorization"])
         assertEquals("Bearer refreshed-token", server.takeRequest().headers["Authorization"])
-        client.close()
+    }
+
+    @Test
+    fun `preemptive refresh replaces an about-to-expire token before sending`() {
+        server.enqueue(response(200, "\"ok\""))
+
+        val refreshCount = AtomicInteger(0)
+        var storedToken = "Bearer ${jwt(expiresInSeconds = 10)}" // within the 60s window
+        val client =
+            RestClient(
+                baseUrl = baseUrl(),
+                tokenProvider = { storedToken },
+                tokenRefresher = {
+                    refreshCount.incrementAndGet()
+                    storedToken = "Bearer refreshed"
+                    storedToken
+                },
+                preemptiveRefresh = 60.seconds,
+            )
+
+        get(client, "/data")
+
+        assertEquals(1, refreshCount.get())
+        assertEquals("Bearer refreshed", server.takeRequest().headers["Authorization"])
+    }
+
+    @Test
+    fun `preemptive refresh disabled with null does not refresh`() {
+        server.enqueue(response(200, "\"ok\""))
+
+        val refreshCount = AtomicInteger(0)
+        val token = "Bearer ${jwt(expiresInSeconds = 10)}"
+        val client =
+            RestClient(
+                baseUrl = baseUrl(),
+                tokenProvider = { token },
+                tokenRefresher = {
+                    refreshCount.incrementAndGet()
+                    "Bearer refreshed"
+                },
+                preemptiveRefresh = null,
+            )
+
+        get(client, "/data")
+
+        assertEquals(0, refreshCount.get())
+        assertEquals(token, server.takeRequest().headers["Authorization"])
+    }
+
+    @Test
+    fun `two clients keep independent header configuration`() {
+        server.enqueue(response(200, "\"ok\""))
+        server.enqueue(response(200, "\"ok\""))
+
+        val clientA = RestClient(baseUrl = baseUrl(), defaultHeaders = mapOf("X-Client" to "A"))
+        val clientB = RestClient(baseUrl = baseUrl(), defaultHeaders = mapOf("X-Client" to "B"))
+
+        get(clientA, "/data")
+        get(clientB, "/data")
+
+        assertEquals("A", server.takeRequest().headers["X-Client"])
+        assertEquals("B", server.takeRequest().headers["X-Client"])
     }
 }
