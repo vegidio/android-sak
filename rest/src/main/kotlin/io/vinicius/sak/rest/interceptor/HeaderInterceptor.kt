@@ -64,6 +64,21 @@ internal class HeaderInterceptor(
         }
 
     /**
+     * Single-entry memo of the last token's parsed expiry (millis, or `null` for opaque/unparseable tokens), so a
+     * request whose token is unchanged skips the Base64 + JSON decode. A `@Volatile` reference keeps reads/writes
+     * atomic; a concurrent double-parse is harmless because [JwtUtility.expiryDate] is idempotent.
+     */
+    @Volatile
+    private var expiryCache: Pair<String, Long?>? = null
+
+    private fun expiryMillisFor(token: String): Long? {
+        expiryCache?.let { if (it.first == token) return it.second }
+        val millis = JwtUtility.expiryDate(token)?.time
+        expiryCache = token to millis
+        return millis
+    }
+
+    /**
      * True when preemptive refresh is enabled and the token's JWT `exp` claim falls within the [preemptiveRefresh]
      * window. Opaque (non-JWT) tokens have no readable expiry, so they are never refreshed preemptively — the reactive
      * [AuthInterceptor] handles their auth failures instead.
@@ -71,16 +86,20 @@ internal class HeaderInterceptor(
     private fun isExpiringSoon(token: String): Boolean {
         val window = preemptiveRefresh
         if (coordinator == null || window == null || window <= Duration.ZERO) return false
-        val expiry = JwtUtility.expiryDate(token) ?: return false
-        return expiry.time - System.currentTimeMillis() <= window.inWholeMilliseconds
+        val expiry = expiryMillisFor(token) ?: return false
+        return expiry - System.currentTimeMillis() <= window.inWholeMilliseconds
     }
 }
 
 /**
- * Reads Retrofit 3's automatically-attached [Invocation] tag to detect [@SkipAuth]. This works out of the box with
- * Retrofit 3 — no custom CallAdapter is needed.
+ * Reads Retrofit 3's automatically-attached [Invocation] tag to resolve the service [Method] backing this request, or
+ * null when no invocation is attached. Shared by [hasSkipAuth]/[cacheable][Request.cacheable]/[retry][Request.retry],
+ * which each inspect the method's annotations.
  */
-internal fun Request.hasSkipAuth(): Boolean {
-    val invocation = tag(Invocation::class.java) ?: return false
-    return invocation.method().isAnnotationPresent(SkipAuth::class.java)
-}
+internal fun Request.invokedMethod(): java.lang.reflect.Method? = tag(Invocation::class.java)?.method()
+
+/**
+ * Reads the service [Method]'s [@SkipAuth] annotation. This works out of the box with Retrofit 3 — no custom
+ * CallAdapter is needed.
+ */
+internal fun Request.hasSkipAuth(): Boolean = invokedMethod()?.isAnnotationPresent(SkipAuth::class.java) == true

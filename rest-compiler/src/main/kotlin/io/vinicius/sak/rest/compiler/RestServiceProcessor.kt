@@ -262,7 +262,7 @@ class RestServiceProcessor(
         CONFIG_PARAMS.forEach { param ->
             val spec = ParameterSpec.builder(param.name, param.type)
             // The service-level @Cacheable(maxEntries) sizes the shared cache; fall back to the static default.
-            val default = if (param.name == "cacheMaxEntries" && cacheMaxEntries != null) {
+            val default = if (param.sizedByServiceCache && cacheMaxEntries != null) {
                 CodeBlock.of("%L", cacheMaxEntries)
             } else {
                 param.default
@@ -273,11 +273,16 @@ class RestServiceProcessor(
         return builder.build()
     }
 
-    /** A single [RestClient] constructor parameter to replicate on the generated client. */
+    /**
+     * A single [RestClient] constructor parameter to replicate on the generated client. When [sizedByServiceCache] is
+     * set, the service-level `@Cacheable(maxEntries)` (when present) overrides [default] — this keeps the override tied
+     * to the parameter object instead of matching its name as a string.
+     */
     private data class ConfigParam(
         val name: String,
         val type: TypeName,
         val default: CodeBlock?,
+        val sizedByServiceCache: Boolean = false,
     )
 
     private companion object {
@@ -316,7 +321,7 @@ class RestServiceProcessor(
         val CONFIG_PARAMS = listOf(
             ConfigParam("baseUrl", STRING, null),
             ConfigParam("defaultHeaders", MAP.parameterizedBy(STRING, STRING), CodeBlock.of("emptyMap()")),
-            ConfigParam("cacheMaxEntries", INT, CodeBlock.of("%L", -1)),
+            ConfigParam("cacheMaxEntries", INT, CodeBlock.of("%L", -1), sizedByServiceCache = true),
             ConfigParam("tokenProvider", TOKEN_PROVIDER, CodeBlock.of("null")),
             ConfigParam("tokenRefresher", TOKEN_REFRESHER, CodeBlock.of("null")),
             ConfigParam("preemptiveRefresh", DURATION.copy(nullable = true), CodeBlock.of("%L.%M", 60, SECONDS)),

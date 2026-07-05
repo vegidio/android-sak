@@ -1,13 +1,11 @@
 package io.vinicius.sak.rest.util
 
 import org.junit.jupiter.api.Assertions.assertEquals
-import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import java.util.Base64
 import java.util.Date
-import kotlin.time.Duration.Companion.seconds
 
 class JwtUtilityTest {
     // Builds a fake (unsigned) JWT with the given payload JSON string
@@ -49,37 +47,5 @@ class JwtUtilityTest {
     @Test
     fun `expiryDate - invalid base64 payload returns null`() {
         assertNull(JwtUtility.expiryDate("header.!!!invalid!!!.signature"))
-    }
-
-    @Test
-    fun `isExpiringSoon - token expiring after threshold returns false`() {
-        val expSeconds = (System.currentTimeMillis() / 1000) + 3600 // 1 hour from now
-        val token = buildJwt("""{"exp":$expSeconds}""")
-        assertFalse(JwtUtility.isExpiringSoon(token, threshold = 60.seconds))
-    }
-
-    @Test
-    fun `isExpiringSoon - token expiring within threshold returns true`() {
-        val expSeconds = (System.currentTimeMillis() / 1000) + 30 // 30 seconds from now
-        val token = buildJwt("""{"exp":$expSeconds}""")
-        assertTrue(JwtUtility.isExpiringSoon(token, threshold = 60.seconds))
-    }
-
-    @Test
-    fun `isExpiringSoon - already expired token returns true`() {
-        val expSeconds = (System.currentTimeMillis() / 1000) - 100
-        val token = buildJwt("""{"exp":$expSeconds}""")
-        assertTrue(JwtUtility.isExpiringSoon(token, threshold = 60.seconds))
-    }
-
-    @Test
-    fun `isExpiringSoon - token without exp claim treated as expired`() {
-        val token = buildJwt("""{"sub":"user1"}""")
-        assertTrue(JwtUtility.isExpiringSoon(token, threshold = 60.seconds))
-    }
-
-    @Test
-    fun `isExpiringSoon - malformed token treated as expired`() {
-        assertTrue(JwtUtility.isExpiringSoon("invalid", threshold = 60.seconds))
     }
 }

@@ -30,8 +30,9 @@ internal class AuthInterceptor(
         val response = chain.proceed(request)
 
         // Only react on authenticated, non-@SkipAuth endpoints whose response the predicate flags as unauthorized.
+        // The cheap header/predicate checks run before the reflection-backed hasSkipAuth() lookup.
         val authHeader = request.header("Authorization")
-        if (request.hasSkipAuth() || authHeader == null || !isUnauthorized(response)) return response
+        if (authHeader == null || request.hasSkipAuth() || !isUnauthorized(response)) return response
 
         val newToken = try {
             runBlocking { coordinator.refresh(authHeader) }

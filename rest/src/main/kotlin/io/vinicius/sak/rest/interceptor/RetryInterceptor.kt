@@ -6,7 +6,6 @@ import kotlinx.coroutines.runBlocking
 import okhttp3.Interceptor
 import okhttp3.Request
 import okhttp3.Response
-import retrofit2.Invocation
 import java.io.IOException
 import kotlin.time.Duration.Companion.seconds
 
@@ -72,4 +71,4 @@ internal class RetryInterceptor : Interceptor {
  * Reads Retrofit 3's automatically-attached [Invocation] tag to resolve the effective [@Retry] for this request, or
  * null when the endpoint carries no retry annotation. Mirrors [hasSkipAuth].
  */
-internal fun Request.retry(): Retry? = tag(Invocation::class.java)?.method()?.getAnnotation(Retry::class.java)
+internal fun Request.retry(): Retry? = invokedMethod()?.getAnnotation(Retry::class.java)

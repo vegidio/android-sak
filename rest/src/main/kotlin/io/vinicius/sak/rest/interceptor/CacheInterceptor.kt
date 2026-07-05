@@ -10,7 +10,6 @@ import okhttp3.Protocol
 import okhttp3.Request
 import okhttp3.Response
 import okhttp3.ResponseBody.Companion.toResponseBody
-import retrofit2.Invocation
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.seconds
 
@@ -74,7 +73,7 @@ internal class CacheInterceptor(
  * annotation at all. Mirrors [hasSkipAuth].
  */
 internal fun Request.cacheable(): Cacheable? {
-    val method = tag(Invocation::class.java)?.method() ?: return null
+    val method = invokedMethod() ?: return null
     if (method.isAnnotationPresent(NoCache::class.java)) return null
     return method.getAnnotation(Cacheable::class.java)
 }

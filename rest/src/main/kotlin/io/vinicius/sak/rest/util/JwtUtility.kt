@@ -6,7 +6,6 @@ import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.longOrNull
 import java.util.Base64
 import java.util.Date
-import kotlin.time.Duration
 
 /**
  * Lightweight JWT utility that extracts the expiry claim without verifying the signature.
@@ -46,17 +45,5 @@ internal object JwtUtility {
         } catch (_: Exception) {
             null
         }
-    }
-
-    /**
-     * Returns true if [token] expires within [threshold] from now, or if the expiry claim cannot be parsed (treated as
-     * already expired).
-     */
-    fun isExpiringSoon(
-        token: String,
-        threshold: Duration,
-    ): Boolean {
-        val expiry = expiryDate(token) ?: return true
-        return expiry.time - System.currentTimeMillis() <= threshold.inWholeMilliseconds
     }
 }
